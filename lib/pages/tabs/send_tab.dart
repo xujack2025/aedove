@@ -72,8 +72,9 @@ class _SendTabState extends State<SendTab> {
   }
 
   Future<void> _pickMedia() async {
-    if (_isPickerActive)
+    if (_isPickerActive) {
       return; // Prevent multiple simultaneous picker requests
+    }
 
     try {
       setState(() {

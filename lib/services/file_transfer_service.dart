@@ -354,44 +354,56 @@ class FileTransferService {
       _pendingRequests[requestId] = transferRequest;
       _requestsController.add(_pendingRequests.values.toList());
 
-      // Send request to target device
-      final client = http.Client();
-      try {
-        final uri = Uri(
-          scheme: 'http',
-          host: targetDeviceIP,
-          port: _currentPort,
-          path: '/request',
-        );
-        print('Sending request to: $uri');
+      // Try to send request to target device on all available ports
+      bool sent = false;
+      Exception? lastError;
 
-        final response = await client.post(
-          uri,
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode(transferRequest.toJson()),
-        );
+      for (final port in _fileTransferPorts) {
+        final client = http.Client();
+        try {
+          final uri = Uri(
+            scheme: 'http',
+            host: targetDeviceIP,
+            port: port,
+            path: '/request',
+          );
+          print('Trying to send request to: $uri');
 
-        if (response.statusCode == 200) {
-          // Show notification that file was ready to be sent
-          await NotificationService.showFileSentNotification(
-            fileName: fileName,
-            fileSize: _formatFileSize(fileSize),
-          );
-        } else {
-          print(
-            'Error: Failed to send file transfer request, status: ${response.statusCode}',
-          );
-          _pendingRequests.remove(requestId);
-          _outgoingFiles.remove(requestId);
-          _requestsController.add(_pendingRequests.values.toList());
+          final response = await client.post(
+            uri,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode(transferRequest.toJson()),
+          ).timeout(const Duration(seconds: 2));
+
+          if (response.statusCode == 200) {
+            print('Successfully sent file transfer request to port $port');
+            // Show notification that file was ready to be sent
+            await NotificationService.showFileSentNotification(
+              fileName: fileName,
+              fileSize: _formatFileSize(fileSize),
+            );
+            sent = true;
+            break;
+          } else {
+            print('Got non-200 response from port $port: ${response.statusCode}');
+          }
+        } catch (e) {
+          lastError = e as Exception;
+          print('Failed to send to port $port: $e');
+          continue;
+        } finally {
+          client.close();
         }
-      } catch (e) {
-        print('Error sending file transfer request: $e');
+      }
+
+      if (!sent) {
+        print('Failed to send file transfer request to any port');
+        if (lastError != null) {
+          print('Last error: $lastError');
+        }
         _pendingRequests.remove(requestId);
         _outgoingFiles.remove(requestId);
         _requestsController.add(_pendingRequests.values.toList());
-      } finally {
-        client.close();
       }
     } catch (e) {
       print('Error sending file: $e');
@@ -403,15 +415,39 @@ class FileTransferService {
       final request = _pendingRequests[requestId];
       if (request == null) return;
 
-      // Send acceptance to sender
-      final client = http.Client();
-      await client.post(
-        Uri.parse('http://${request.ipAddress}:$_currentPort/accept'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'request_id': requestId}),
-      );
+      bool accepted = false;
+      Exception? lastError;
 
-      client.close();
+      for (final port in _fileTransferPorts) {
+        final client = http.Client();
+        try {
+          print('Trying to send accept request to port $port');
+          final response = await client.post(
+            Uri.parse('http://${request.ipAddress}:$port/accept'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'request_id': requestId}),
+          ).timeout(const Duration(seconds: 2));
+
+          if (response.statusCode == 200) {
+            print('Successfully sent accept request to port $port');
+            accepted = true;
+            break;
+          }
+        } catch (e) {
+          lastError = e as Exception;
+          print('Failed to send accept to port $port: $e');
+          continue;
+        } finally {
+          client.close();
+        }
+      }
+
+      if (!accepted) {
+        print('Failed to send accept request to any port');
+        if (lastError != null) {
+          print('Last error: $lastError');
+        }
+      }
     } catch (e) {
       print('Error accepting file transfer: $e');
     }
@@ -422,15 +458,39 @@ class FileTransferService {
       final request = _pendingRequests[requestId];
       if (request == null) return;
 
-      // Send denial to sender
-      final client = http.Client();
-      await client.post(
-        Uri.parse('http://${request.ipAddress}:$_currentPort/deny'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'request_id': requestId}),
-      );
+      bool denied = false;
+      Exception? lastError;
 
-      client.close();
+      for (final port in _fileTransferPorts) {
+        final client = http.Client();
+        try {
+          print('Trying to send deny request to port $port');
+          final response = await client.post(
+            Uri.parse('http://${request.ipAddress}:$port/deny'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'request_id': requestId}),
+          ).timeout(const Duration(seconds: 2));
+
+          if (response.statusCode == 200) {
+            print('Successfully sent deny request to port $port');
+            denied = true;
+            break;
+          }
+        } catch (e) {
+          lastError = e as Exception;
+          print('Failed to send deny to port $port: $e');
+          continue;
+        } finally {
+          client.close();
+        }
+      }
+
+      if (!denied) {
+        print('Failed to send deny request to any port');
+        if (lastError != null) {
+          print('Last error: $lastError');
+        }
+      }
     } catch (e) {
       print('Error denying file transfer: $e');
     }

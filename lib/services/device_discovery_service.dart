@@ -95,16 +95,49 @@ class DeviceDiscoveryService {
   static Future<void> _startDiscoveryServer() async {
     for (final port in _discoveryPorts) {
       try {
+        // Try to bind to specific interfaces first
+        final interfaces = await NetworkInterface.list(
+          type: InternetAddressType.IPv4,
+          includeLinkLocal: false,
+        );
+
+        for (final interface in interfaces) {
+          for (final addr in interface.addresses) {
+            if (!addr.isLoopback) {
+              try {
+                print('Trying to bind to ${addr.address}:$port');
+                _server = await HttpServer.bind(
+                  addr,
+                  port,
+                  shared: true,
+                  v6Only: false,
+                );
+                _currentPort = port;
+                _server!.listen((HttpRequest request) {
+                  _handleDiscoveryRequest(request);
+                });
+                print('Successfully bound to ${addr.address}:$_currentPort');
+                return;
+              } catch (e) {
+                print('Failed to bind to ${addr.address}:$port: $e');
+                continue;
+              }
+            }
+          }
+        }
+
+        // If binding to specific interfaces fails, try binding to any
+        print('Trying to bind to any address on port $port');
         _server = await HttpServer.bind(
-          InternetAddress.anyIPv4, 
+          InternetAddress.anyIPv4,
           port,
-          shared: true // Enable socket sharing
+          shared: true,
         );
         _currentPort = port;
         _server!.listen((HttpRequest request) {
           _handleDiscoveryRequest(request);
         });
-        print('Successfully bound to port $_currentPort');
+        print('Successfully bound to any address on port $_currentPort');
         return;
       } catch (e) {
         print('Failed to bind to port $port: $e');
@@ -220,7 +253,7 @@ class DeviceDiscoveryService {
 
   static Future<void> discoverDevices([String? ip]) async {
     try {
-      String? currentIP;
+      List<String> networkBases = [];
       
       if (Platform.isWindows) {
         try {
@@ -229,107 +262,139 @@ class DeviceDiscoveryService {
             type: InternetAddressType.IPv4,
           );
           
-          // Find the first non-loopback IPv4 address
+          // Collect all network bases from all interfaces
           for (var interface in interfaces) {
             for (var addr in interface.addresses) {
               if (!addr.isLoopback && addr.type == InternetAddressType.IPv4) {
-                currentIP = addr.address;
-                break;
+                final base = _getNetworkBase(addr.address);
+                if (!networkBases.contains(base)) {
+                  networkBases.add(base);
+                }
               }
             }
-            if (currentIP != null) break;
           }
         } catch (e) {
           print('Error getting Windows IP: $e');
         }
       } else {
         final networkInfo = NetworkInfo();
-        currentIP = ip ?? await networkInfo.getWifiIP();
+        final currentIP = ip ?? await networkInfo.getWifiIP();
+        if (currentIP != null) {
+          networkBases.add(_getNetworkBase(currentIP));
+        }
       }
 
-      if (currentIP == null) {
-        print('Could not determine current IP address');
+      if (networkBases.isEmpty) {
+        print('Could not determine any network addresses');
         return;
       }
 
-      final networkBase = _getNetworkBase(currentIP);
-      print('Starting device discovery on network: $networkBase.*');
-
-      // Create a list of all discovery tasks
+      // Create a list of all discovery tasks for all networks
       List<Future<void>> discoveryTasks = [];
       
-      for (int i = 1; i <= 254; i++) {
-        final targetIP = '$networkBase.$i';
-        if (targetIP == currentIP) continue;
+      for (final networkBase in networkBases) {
+        print('Starting device discovery on network: $networkBase.*');
         
-        // Add discovery task to the list
-        discoveryTasks.add(_discoverDevice(targetIP).timeout(
-          const Duration(seconds: 2),
-          onTimeout: () => print('Discovery timeout for $targetIP'),
-        ));
+        for (int i = 1; i <= 254; i++) {
+          final targetIP = '$networkBase.$i';
+          
+          // Try each port for each IP
+          for (final port in _discoveryPorts) {
+            discoveryTasks.add(_discoverDevice(targetIP, port).timeout(
+              const Duration(seconds: 1),
+              onTimeout: () => print('Discovery timeout for $targetIP:$port'),
+            ));
+          }
+        }
       }
 
-      // Run discovery tasks in parallel with a maximum of 10 concurrent tasks
-      final chunks = discoveryTasks.chunked(10);
+      // Run discovery tasks in parallel with a maximum of 50 concurrent tasks
+      final chunks = discoveryTasks.chunked(50);
       for (final chunk in chunks) {
         await Future.wait(chunk).catchError((e) {
           print('Error in discovery chunk: $e');
         });
       }
       
-      print('Device discovery completed');
+      print('Device discovery completed on all networks');
     } catch (e) {
       print('Device discovery error: $e');
     }
   }
 
   static Future<void> _sendBroadcast(String ip, DeviceInfo deviceInfo) async {
+    final client = HttpClient();
     try {
-      final client = HttpClient();
       client.connectionTimeout = const Duration(seconds: 1);
 
-      // Try both IPv4 and IPv6
-      List<String> addresses = [ip];
+      // First try the direct IP
       try {
-        final lookupResult = await InternetAddress.lookup(ip);
-        addresses.addAll(lookupResult.map((addr) => addr.address));
+        print('Attempting broadcast to $ip:$_currentPort');
+        final request = await client.postUrl(
+          Uri.parse('http://$ip:$_currentPort/register'),
+        );
+        request.headers.contentType = ContentType.json;
+        request.write(jsonEncode(deviceInfo.toJson()));
+
+        final response = await request.close();
+        if (response.statusCode == 200) {
+          print('Successfully registered with device at $ip:$_currentPort');
+          _discoveredDevices[deviceInfo.id] = deviceInfo;
+          _devicesController.add(_discoveredDevices.values.toList());
+          return;
+        }
       } catch (e) {
-        print('Address lookup error: $e');
-      }
+        // Try alternate ports if the primary port fails
+        for (final port in _discoveryPorts) {
+          if (port == _currentPort) continue;
+          try {
+            print('Trying alternate port $port for $ip');
+            final request = await client.postUrl(
+              Uri.parse('http://$ip:$port/register'),
+            );
+            request.headers.contentType = ContentType.json;
+            request.write(jsonEncode(deviceInfo.toJson()));
 
-      for (final address in addresses) {
-        try {
-          final request = await client.postUrl(
-            Uri.parse('http://$address:$_currentPort/register'),
-          );
-          request.headers.contentType = ContentType.json;
-          request.write(jsonEncode(deviceInfo.toJson()));
-
-          final response = await request.close();
-          if (response.statusCode == 200) {
-            // Device is online, update our list
-            _discoveredDevices[deviceInfo.id] = deviceInfo;
-            _devicesController.add(_discoveredDevices.values.toList());
-            break; // Successfully contacted the device
+            final response = await request.close();
+            if (response.statusCode == 200) {
+              print('Successfully registered with device at $ip:$port');
+              deviceInfo = DeviceInfo(
+                id: deviceInfo.id,
+                name: deviceInfo.name,
+                ip: deviceInfo.ip,
+                port: port,
+                lastSeen: DateTime.now(),
+              );
+              _discoveredDevices[deviceInfo.id] = deviceInfo;
+              _devicesController.add(_discoveredDevices.values.toList());
+              return;
+            }
+          } catch (e) {
+            // Continue to next port
+            continue;
           }
-        } catch (e) {
-          // Continue trying other addresses
-          continue;
         }
       }
     } catch (e) {
-      print('Broadcast error: $e');
+      if (!e.toString().contains('Connection refused') &&
+          !e.toString().contains('Connection timed out')) {
+        print('Broadcast error to $ip: $e');
+      }
+    } finally {
+      client.close();
     }
   }
 
-  static Future<void> _discoverDevice(String ip) async {
+  static Future<void> _discoverDevice(String ip, [int? port]) async {
     final client = HttpClient();
     try {
-      client.connectionTimeout = const Duration(seconds: _discoveryTimeout);
+      client.connectionTimeout = const Duration(seconds: 1);
 
-      print('Attempting to discover device at $ip:$_currentPort');
+      final targetPort = port ?? _currentPort;
+      print('Attempting to discover device at $ip:$targetPort');
+      
       final request = await client.getUrl(
-        Uri.parse('http://$ip:$_currentPort/discover'),
+        Uri.parse('http://$ip:$targetPort/discover'),
       );
 
       final response = await request.close();
@@ -342,7 +407,7 @@ class DeviceDiscoveryService {
         _discoveredDevices[deviceInfo.id] = deviceInfo;
         _devicesController.add(_discoveredDevices.values.toList());
       } else {
-        print('Got non-200 response from $ip: ${response.statusCode}');
+        print('Got non-200 response from $ip:$targetPort: ${response.statusCode}');
       }
     } catch (e) {
       // Only log connection errors if they're not typical "host unreachable" errors
