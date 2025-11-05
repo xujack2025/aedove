@@ -116,10 +116,8 @@ class DeviceDiscoveryService {
 
   static Future<void> _initializeServices() async {
     await _startMdnsService();
-    // iOS has strict limitations for UDP broadcast; rely on mDNS there
-    if (!Platform.isIOS) {
-      await _startUdpBroadcast();
-    }
+    // Start UDP socket on all platforms to listen; only non-iOS will broadcast
+    await _startUdpBroadcast();
     await _startCleanupTimer();
     _startNetworkMonitoring();
     _startAndroidMdnsFallback();
@@ -444,15 +442,16 @@ class DeviceDiscoveryService {
         },
       );
 
-      // Start periodic broadcast
+      // Start periodic broadcast (disable on iOS: only listen/respond)
       _broadcastTimer?.cancel();
-      _broadcastTimer = Timer.periodic(
-        Duration(seconds: _broadcastInterval),
-        (_) => _sendUdpBroadcast(),
-      );
-
-      // Send initial broadcast
-      await _sendUdpBroadcast();
+      if (!Platform.isIOS) {
+        _broadcastTimer = Timer.periodic(
+          Duration(seconds: _broadcastInterval),
+          (_) => _sendUdpBroadcast(),
+        );
+        // Send initial broadcast
+        await _sendUdpBroadcast();
+      }
       if (_verbose) print('UDP broadcast service started successfully');
     } catch (e) {
       print('Error initializing UDP socket: $e');
@@ -653,6 +652,14 @@ class DeviceDiscoveryService {
         }
       }
 
+      // Skip if service resolves to our own IP (self)
+      try {
+        final me = await _getDeviceInfo();
+        if (serviceIp != null && me.ip == serviceIp) {
+          return;
+        }
+      } catch (_) {}
+
       // Prefer transfer port (tport), then service.port, then uport, then fallback
       int port = service.port != 0 ? service.port : _mdnsPort;
       final tportAttr = attributes['tport'];
@@ -698,7 +705,17 @@ class DeviceDiscoveryService {
 
   static void _updateDiscoveredDevice(DeviceInfo deviceInfo) {
     if (deviceInfo.id.isEmpty || deviceInfo.ip == 'unknown') return;
-
+    // Deduplicate by IP: if an entry with same IP exists under a different id, replace it
+    String existingKey = '';
+    for (final e in _discoveredDevices.entries) {
+      if (e.value.ip == deviceInfo.ip && e.key != deviceInfo.id) {
+        existingKey = e.key;
+        break;
+      }
+    }
+    if (existingKey.isNotEmpty) {
+      _discoveredDevices.remove(existingKey);
+    }
     _discoveredDevices[deviceInfo.id] = deviceInfo;
     _devicesController.add(_discoveredDevices.values.toList());
     if (_verbose) print('Updated device: ${deviceInfo.toJson()}');
@@ -825,7 +842,8 @@ class DeviceDiscoveryService {
       id: deviceId,
       name: deviceName,
       ip: ipAddress,
-      port: _mdnsPort, // Use mDNS port as the primary port
+      // Advertise our actual file transfer port so peers can connect correctly
+      port: FileTransferService.getServerPort(),
       lastSeen: DateTime.now(),
     );
   }
