@@ -28,10 +28,9 @@ class PermissionService {
 
         return false;
       } else if (Platform.isIOS) {
-        // Saving to app Documents doesn't require permission, but if you plan
-        // to save to the Photos library request photos permission.
-        final photos = await Permission.photos.request();
-        return photos.isGranted;
+        // iOS doesn't require storage permission for basic functionality
+        // Only request photos permission if needed for saving to Photos library
+        return true;
       }
     } catch (e) {
       print('Error requesting storage permission: $e');
