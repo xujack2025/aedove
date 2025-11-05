@@ -48,6 +48,7 @@ class DeviceInfo {
 class DeviceDiscoveryService {
   static const String _serviceType = '_cpshare._tcp';
   static String? _currentDeviceId;
+  static String? _currentDeviceIp;
   static const int _mdnsPort = 53317; // Port for mDNS service
   static const int _udpPort = 53318; // Separate port for UDP broadcast
   static const int _broadcastInterval = 30; // seconds
@@ -91,9 +92,10 @@ class DeviceDiscoveryService {
       _isInitializing = true;
       print('Starting device discovery service...');
 
-      // Get and store current device ID first
+      // Get and store current device ID/IP first
       final deviceInfo = await _getDeviceInfo();
       _currentDeviceId = deviceInfo.id;
+      _currentDeviceIp = deviceInfo.ip;
 
       await _initializeServices().timeout(
         _timeoutDuration,
@@ -705,6 +707,11 @@ class DeviceDiscoveryService {
 
   static void _updateDiscoveredDevice(DeviceInfo deviceInfo) {
     if (deviceInfo.id.isEmpty || deviceInfo.ip == 'unknown') return;
+    // Final guard: never list ourselves
+    if (deviceInfo.id == _currentDeviceId ||
+        deviceInfo.ip == _currentDeviceIp) {
+      return;
+    }
     // Deduplicate by IP: if an entry with same IP exists under a different id, replace it
     String existingKey = '';
     for (final e in _discoveredDevices.entries) {
