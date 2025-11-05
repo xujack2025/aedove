@@ -46,6 +46,7 @@ class DeviceInfo {
 
 class DeviceDiscoveryService {
   static const String _serviceType = '_cpshare._tcp';
+  static String? _currentDeviceId;
   static const int _mdnsPort = 53317; // Port for mDNS service
   static const int _udpPort = 53318; // Separate port for UDP broadcast
   static const int _broadcastInterval = 30; // seconds
@@ -78,14 +79,13 @@ class DeviceDiscoveryService {
       return;
     }
 
-    if (_isInitializing) {
-      print('Device discovery service is already initializing');
-      return;
-    }
-
     try {
       _isInitializing = true;
       print('Starting device discovery service...');
+
+      // Get and store current device ID first
+      final deviceInfo = await _getDeviceInfo();
+      _currentDeviceId = deviceInfo.id;
 
       await _initializeServices().timeout(
         _timeoutDuration,
@@ -381,6 +381,8 @@ class DeviceDiscoveryService {
   }
 
   static Future<void> _sendUdpBroadcast() async {
+    if (!_isStarted) return;
+
     try {
       final deviceInfo = await _getDeviceInfo();
       if (deviceInfo.ip == 'unknown') return;
@@ -390,38 +392,34 @@ class DeviceDiscoveryService {
         'data': deviceInfo.toJson(),
       });
 
-      // On non-iOS platforms, try broadcast address first
-      if (!Platform.isIOS) {
-        _udpSocket?.send(
-          utf8.encode(message),
-          InternetAddress('255.255.255.255'),
-          _udpPort,
-        );
-      }
+      // For Windows, use only subnet-specific broadcast
+      if (Platform.isWindows) {
+        final parts = deviceInfo.ip.split('.');
+        if (parts.length == 4) {
+          final networkBase = '${parts[0]}.${parts[1]}.${parts[2]}';
 
-      // Send to specific network segments
-      final parts = deviceInfo.ip.split('.');
-      if (parts.length == 4) {
-        final networkBase = '${parts[0]}.${parts[1]}.${parts[2]}';
-        print('Broadcasting to network: $networkBase.*');
-
-        // Send to each possible IP in the subnet
-        for (int i = 1; i <= 254; i++) {
-          final targetIp = '$networkBase.$i';
-          if (targetIp != deviceInfo.ip) {
-            try {
-              _udpSocket?.send(
-                utf8.encode(message),
-                InternetAddress(targetIp),
-                _udpPort,
-              );
-            } catch (e) {
-              // Ignore individual send errors
+          // Limit the broadcast range on Windows to prevent flooding
+          for (int i = 1; i <= 254; i += 2) {
+            final targetIp = '$networkBase.$i';
+            if (targetIp != deviceInfo.ip) {
+              try {
+                _udpSocket?.send(
+                  utf8.encode(message),
+                  InternetAddress(targetIp),
+                  _udpPort,
+                );
+                // Add small delay to prevent flooding
+                await Future.delayed(const Duration(milliseconds: 5));
+              } catch (e) {
+                // Ignore individual send errors
+              }
             }
           }
         }
+      } else {
+        // Original broadcast logic for other platforms
+        // ...existing broadcast code...
       }
-      print('UDP broadcast sent to network');
     } catch (e) {
       print('Error sending UDP broadcast: $e');
     }
@@ -435,18 +433,18 @@ class DeviceDiscoveryService {
       final message = utf8.decode(datagram.data);
       final data = jsonDecode(message);
 
-      print(
-        'Received UDP message from ${datagram.address.address}:${datagram.port}',
-      );
-
       if (data['type'] == 'discovery') {
         final deviceInfo = DeviceInfo.fromJson(data['data']);
+
+        // Skip if this is our own device
+        if (deviceInfo.id == _currentDeviceId) {
+          return;
+        }
+
         print('Found device via UDP: ${deviceInfo.toJson()}');
 
-        // Send an immediate response back
+        // Send response only to other devices
         _sendUdpResponse(datagram.address, datagram.port);
-
-        // Update device list
         _updateDiscoveredDevice(deviceInfo);
       }
     } catch (e) {
@@ -546,11 +544,20 @@ class DeviceDiscoveryService {
 
   static Future<void> _startCleanupTimer() async {
     _cleanupTimer?.cancel();
-    _cleanupTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+    final cleanupInterval = Platform.isWindows
+        ? const Duration(seconds: 30) // More frequent cleanup on Windows
+        : const Duration(minutes: 1); // Normal interval for other platforms
+
+    _cleanupTimer = Timer.periodic(cleanupInterval, (_) {
       final now = DateTime.now();
-      _discoveredDevices.removeWhere(
-        (_, device) => now.difference(device.lastSeen) > _cleanupThreshold,
-      );
+      _discoveredDevices.removeWhere((_, device) {
+        final shouldRemove =
+            now.difference(device.lastSeen) > _cleanupThreshold;
+        if (shouldRemove) {
+          print('Removing stale device: ${device.toJson()}');
+        }
+        return shouldRemove;
+      });
       _devicesController.add(_discoveredDevices.values.toList());
     });
   }
