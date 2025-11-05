@@ -62,9 +62,8 @@
 		<string>The app uses the local network to find and connect to nearby devices.</string>
 		<key>NSBonjourServices</key>
 		<array>
-			<string>_http._tcp</string>
-			<string>_bonjour._tcp</string>
-			<string>_lnp._tcp.</string>
+			<string>_cpshare._tcp</string>
+			<string>_cpshare._tcp.</string>
 		</array>
 
 		<!-- share_handler -->

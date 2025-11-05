@@ -81,6 +81,11 @@ class DeviceDiscoveryService {
       return;
     }
 
+    if (_isInitializing) {
+      print('Device discovery service is already initializing');
+      return;
+    }
+
     try {
       _isInitializing = true;
       print('Starting device discovery service...');
@@ -110,7 +115,10 @@ class DeviceDiscoveryService {
 
   static Future<void> _initializeServices() async {
     await _startMdnsService();
-    await _startUdpBroadcast();
+    // iOS has strict limitations for UDP broadcast; rely on mDNS there
+    if (!Platform.isIOS) {
+      await _startUdpBroadcast();
+    }
     await _startCleanupTimer();
     _startNetworkMonitoring();
   }
@@ -417,8 +425,45 @@ class DeviceDiscoveryService {
           }
         }
       } else {
-        // Original broadcast logic for other platforms
-        // ...existing broadcast code...
+        // Non-Windows platforms
+        final parts = deviceInfo.ip.split('.');
+        if (parts.length == 4) {
+          final networkBase = '${parts[0]}.${parts[1]}.${parts[2]}';
+          // macOS/Android/Linux: try global and directed broadcast
+          if (!Platform.isIOS) {
+            // Global broadcast (some routers drop it, but cheap win when it works)
+            try {
+              _udpSocket?.send(
+                utf8.encode(message),
+                InternetAddress('255.255.255.255'),
+                _udpPort,
+              );
+            } catch (_) {}
+            // Directed broadcast for the subnet
+            try {
+              _udpSocket?.send(
+                utf8.encode(message),
+                InternetAddress('$networkBase.255'),
+                _udpPort,
+              );
+            } catch (_) {}
+          } else {
+            // iOS: avoid 255.255.255.255. Probe subnet sparsely to reduce cost
+            for (int i = 1; i <= 254; i += 4) {
+              final targetIp = '$networkBase.$i';
+              if (targetIp != deviceInfo.ip) {
+                try {
+                  _udpSocket?.send(
+                    utf8.encode(message),
+                    InternetAddress(targetIp),
+                    _udpPort,
+                  );
+                  await Future.delayed(const Duration(milliseconds: 2));
+                } catch (_) {}
+              }
+            }
+          }
+        }
       }
     } catch (e) {
       if (_verbose) print('Error sending UDP broadcast: $e');
@@ -452,7 +497,7 @@ class DeviceDiscoveryService {
         return;
       }
 
-      if (type == 'discovery') {
+      if (type == 'discovery' || type == 'discovery_response') {
         final deviceInfo = DeviceInfo.fromJson(data['data']);
 
         // Skip if this is our own device
@@ -460,10 +505,13 @@ class DeviceDiscoveryService {
           return;
         }
 
-        if (_verbose) print('Found device via UDP: ${deviceInfo.toJson()}');
+        if (_verbose)
+          print('Found device via UDP ($type): ${deviceInfo.toJson()}');
 
-        // Send response only to other devices
-        _sendUdpResponse(datagram.address, datagram.port);
+        // If we received a discovery (not a response), reply.
+        if (type == 'discovery') {
+          _sendUdpResponse(datagram.address, datagram.port);
+        }
         _updateDiscoveredDevice(deviceInfo);
       }
     } catch (e) {
@@ -599,15 +647,17 @@ class DeviceDiscoveryService {
         } else {
           // Verify UDP socket is still functional
           try {
-            final healthMsg = jsonEncode({
-              'type': 'health_check',
-              'ts': DateTime.now().millisecondsSinceEpoch,
-            });
-            _udpSocket?.send(
-              utf8.encode(healthMsg),
-              InternetAddress('127.0.0.1'),
-              _udpPort,
-            );
+            if (!Platform.isIOS) {
+              final healthMsg = jsonEncode({
+                'type': 'health_check',
+                'ts': DateTime.now().millisecondsSinceEpoch,
+              });
+              _udpSocket?.send(
+                utf8.encode(healthMsg),
+                InternetAddress('127.0.0.1'),
+                _udpPort,
+              );
+            }
           } catch (e) {
             if (_verbose) {
               print('UDP socket test failed, scheduling reconnect...');
