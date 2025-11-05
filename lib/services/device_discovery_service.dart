@@ -48,13 +48,16 @@ class DeviceDiscoveryService {
   static const int _mdnsPort = 53317; // Port for mDNS service
   static const int _udpPort = 53318; // Separate port for UDP broadcast
   static const int _broadcastInterval = 30; // seconds
-  static const Duration _cleanupThreshold = Duration(minutes: 2);
+  static const Duration _cleanupThreshold = Duration(minutes: 5);
+  static const Duration _reconnectDelay = Duration(seconds: 5);
 
   static BonsoirBroadcast? _broadcast;
   static BonsoirDiscovery? _discovery;
   static RawDatagramSocket? _udpSocket;
   static Timer? _broadcastTimer;
   static Timer? _cleanupTimer;
+  static Timer? _reconnectTimer;
+  static Timer? _networkCheckTimer;
 
   static bool _isStarted = false;
   static bool _isInitializing = false;
@@ -106,6 +109,7 @@ class DeviceDiscoveryService {
     await _startMdnsService();
     await _startUdpBroadcast();
     await _startCleanupTimer();
+    _startNetworkMonitoring();
   }
 
   static Future<void> stop() async {
@@ -161,6 +165,10 @@ class DeviceDiscoveryService {
       // Clear discovered devices
       _discoveredDevices.clear();
 
+      // Cancel all timers
+      _networkCheckTimer?.cancel();
+      _reconnectTimer?.cancel();
+
       print('Device discovery service stopped successfully');
     } catch (e) {
       print('Error stopping device discovery service: $e');
@@ -171,6 +179,8 @@ class DeviceDiscoveryService {
       _udpSocket = null;
       _broadcastTimer = null;
       _cleanupTimer = null;
+      _networkCheckTimer = null;
+      _reconnectTimer = null;
       _isInitializing = false;
     }
   }
@@ -303,31 +313,68 @@ class DeviceDiscoveryService {
 
   static Future<void> _startUdpBroadcast() async {
     print('Starting UDP broadcast service...');
+    await _initializeUdpSocket();
+  }
+
+  static Future<void> _initializeUdpSocket() async {
     try {
+      // Close existing socket if any
+      _udpSocket?.close();
+      _udpSocket = null;
+
+      // Create new socket
       _udpSocket = await RawDatagramSocket.bind(
         InternetAddress.anyIPv4,
         _udpPort,
       );
       _udpSocket!.broadcastEnabled = true;
 
-      // Listen for incoming discovery messages
-      _udpSocket!.listen((RawSocketEvent event) {
-        if (event == RawSocketEvent.read) {
-          _handleUdpMessage(_udpSocket!);
-        }
-      }, onError: (e) => print('UDP socket error: $e'));
+      // Listen for incoming discovery messages with error handling
+      _udpSocket!.listen(
+        (RawSocketEvent event) {
+          if (event == RawSocketEvent.read) {
+            _handleUdpMessage(_udpSocket!);
+          }
+        },
+        onError: (e) {
+          print('UDP socket error: $e');
+          _scheduleReconnect();
+        },
+        onDone: () {
+          print('UDP socket closed unexpectedly');
+          _scheduleReconnect();
+        },
+      );
 
+      // Start periodic broadcast
+      _broadcastTimer?.cancel();
       _broadcastTimer = Timer.periodic(
         Duration(seconds: _broadcastInterval),
         (_) => _sendUdpBroadcast(),
       );
 
+      // Send initial broadcast
       await _sendUdpBroadcast();
       print('UDP broadcast service started successfully');
     } catch (e) {
-      print('Error starting UDP broadcast: $e');
+      print('Error initializing UDP socket: $e');
+      _scheduleReconnect();
       rethrow;
     }
+  }
+
+  static void _scheduleReconnect() {
+    _reconnectTimer?.cancel();
+    _reconnectTimer = Timer(_reconnectDelay, () async {
+      if (_isStarted && !_isInitializing) {
+        print('Attempting to reconnect UDP service...');
+        try {
+          await _initializeUdpSocket();
+        } catch (e) {
+          print('Reconnection attempt failed: $e');
+        }
+      }
+    });
   }
 
   static Future<void> _sendUdpBroadcast() async {
@@ -495,12 +542,42 @@ class DeviceDiscoveryService {
   }
 
   static Future<void> _startCleanupTimer() async {
+    _cleanupTimer?.cancel();
     _cleanupTimer = Timer.periodic(const Duration(minutes: 1), (_) {
       final now = DateTime.now();
       _discoveredDevices.removeWhere(
         (_, device) => now.difference(device.lastSeen) > _cleanupThreshold,
       );
       _devicesController.add(_discoveredDevices.values.toList());
+    });
+  }
+
+  static void _startNetworkMonitoring() {
+    _networkCheckTimer?.cancel();
+    _networkCheckTimer = Timer.periodic(const Duration(seconds: 30), (_) async {
+      if (!_isStarted || _isInitializing) return;
+
+      try {
+        final currentInfo = await _getDeviceInfo();
+        if (currentInfo.ip == 'unknown') {
+          print('Network appears to be down, scheduling reconnect...');
+          _scheduleReconnect();
+        } else {
+          // Verify UDP socket is still functional
+          try {
+            _udpSocket?.send(
+              utf8.encode('ping'),
+              InternetAddress('127.0.0.1'),
+              _udpPort,
+            );
+          } catch (e) {
+            print('UDP socket test failed, scheduling reconnect...');
+            _scheduleReconnect();
+          }
+        }
+      } catch (e) {
+        print('Error during network check: $e');
+      }
     });
   }
 
