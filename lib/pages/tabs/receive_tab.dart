@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:network_info_plus/network_info_plus.dart';
 import 'package:cpshare/services/device_discovery_service.dart';
@@ -58,12 +59,13 @@ class _ReceiveTabState extends State<ReceiveTab> {
     FileTransferService.fileSavedStream.listen((path) {
       if (mounted) {
         setState(() {
-          _lastDownloadedPath = path;
+          // Show only the file name instead of full path
+          _lastDownloadedPath = p.basename(path);
         });
         try {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('File saved to: $path'),
+              content: Text('Saved: ${p.basename(path)}'),
               duration: const Duration(seconds: 4),
             ),
           );
@@ -83,7 +85,7 @@ class _ReceiveTabState extends State<ReceiveTab> {
             includeLinkLocal: false,
             type: InternetAddressType.IPv4,
           );
-          
+
           // Find the first non-loopback IPv4 address
           for (var interface in interfaces) {
             for (var addr in interface.addresses) {
@@ -137,7 +139,11 @@ class _ReceiveTabState extends State<ReceiveTab> {
 
   Future<void> _ensurePermissions() async {
     // Desktop platforms (Windows, macOS, Linux) and iOS handle permissions differently
-    if (Platform.isWindows || Platform.isMacOS || Platform.isLinux || Platform.isIOS) return;
+    if (Platform.isWindows ||
+        Platform.isMacOS ||
+        Platform.isLinux ||
+        Platform.isIOS)
+      return;
 
     try {
       final storageGranted = await PermissionService.requestStoragePermission();
@@ -172,7 +178,9 @@ class _ReceiveTabState extends State<ReceiveTab> {
                   },
                   child: const Text('Retry'),
                 ),
-                if (Platform.isAndroid || Platform.isIOS) // Only show Open Settings on mobile platforms
+                if (Platform.isAndroid ||
+                    Platform
+                        .isIOS) // Only show Open Settings on mobile platforms
                   TextButton(
                     onPressed: () async {
                       Navigator.of(context).pop();
@@ -352,7 +360,7 @@ class _ReceiveTabState extends State<ReceiveTab> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
-                          'Last downloaded to: $_lastDownloadedPath',
+                          'Last downloaded: $_lastDownloadedPath',
                           style: Theme.of(context).textTheme.bodyMedium,
                         ),
                       ),

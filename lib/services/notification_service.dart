@@ -1,3 +1,4 @@
+import 'dart:io';
 // import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:awesome_notifications/awesome_notifications.dart';
 
@@ -93,9 +94,16 @@ class NotificationService {
     required String filePath,
     bool isIOS = false,
   }) async {
-    final notificationMessage = isIOS
-        ? '📥 Saved to Documents\nFile: $fileName ($fileSize)'
-        : '📥 Location: $filePath\nFile: $fileName ($fileSize)';
+    String notificationMessage;
+    if (isIOS) {
+      notificationMessage =
+          '📥 Saved to Documents\nFile: $fileName ($fileSize)';
+    } else if (Platform.isWindows) {
+      notificationMessage =
+          '📥 Saved to Downloads\nFile: $fileName ($fileSize)';
+    } else {
+      notificationMessage = '📥 File: $fileName ($fileSize)';
+    }
 
     await AwesomeNotifications().createNotification(
       content: NotificationContent(
