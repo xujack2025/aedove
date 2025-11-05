@@ -1,4 +1,3 @@
-import 'dart:developer' as dev;
 import 'dart:io';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -45,8 +44,19 @@ class PermissionService {
         // Desktop platforms handle location access through system settings
         return true;
       } else if (Platform.isAndroid) {
-        final status = await Permission.location.request();
-        return status.isGranted;
+        bool granted = false;
+        try {
+          // Try nearby Wi-Fi devices on Android 13+
+          final nearby = await Permission.nearbyWifiDevices.request();
+          if (nearby.isGranted) granted = true;
+        } catch (_) {}
+
+        if (!granted) {
+          // Fallback to location if needed on older devices
+          final status = await Permission.location.request();
+          granted = status.isGranted;
+        }
+        return granted;
       } else if (Platform.isIOS) {
         final status = await Permission.locationWhenInUse.request();
         return status.isGranted;

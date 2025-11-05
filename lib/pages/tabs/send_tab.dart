@@ -205,6 +205,7 @@ class _SendTabState extends State<SendTab> {
           targetDeviceIP: device.ip,
           filePath: file.path,
           fileName: file.path.split('/').last,
+          targetDevicePort: device.port,
         );
       }
 

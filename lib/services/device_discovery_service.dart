@@ -257,8 +257,8 @@ class DeviceDiscoveryService {
         );
       }
 
-      // Set up discovery listener with more aggressive discovery
-      _discovery?.eventStream?.listen((event) {
+      // Set up discovery listener with resolution when needed
+      _discovery?.eventStream?.listen((event) async {
         if (_verbose) {
           print(
             'Received mDNS event: ${event.runtimeType} - ${event.toString()}',
@@ -270,7 +270,9 @@ class DeviceDiscoveryService {
           }
           if (event.toString().contains('Found') ||
               event.toString().contains('Resolved')) {
-            _handleDiscoveredService(event.service);
+            final service = event.service!;
+            // We include IP/ports in attributes, so resolution is optional. Handle as-is.
+            await _handleDiscoveredService(service);
           } else if (event.toString().contains('Lost')) {
             _handleLostService(event.service);
           }
@@ -566,11 +568,14 @@ class DeviceDiscoveryService {
         }
       }
 
-      // Get UDP port from attributes if available
-      int port = _mdnsPort; // Default to mDNS port
-      final attrPort = attributes['udp_port'];
-      if (attrPort != null) {
-        port = int.tryParse(attrPort.toString()) ?? _mdnsPort;
+      // Prefer transfer_port for actual file transfers, then udp_port, then service.port
+      int port = service.port != 0 ? service.port : _mdnsPort;
+      final transferPortAttr = attributes['transfer_port'];
+      final udpPortAttr = attributes['udp_port'];
+      if (transferPortAttr != null) {
+        port = int.tryParse(transferPortAttr.toString()) ?? port;
+      } else if (udpPortAttr != null) {
+        port = int.tryParse(udpPortAttr.toString()) ?? port;
       }
 
       // If we have an IP address, create the device info

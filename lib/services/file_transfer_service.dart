@@ -327,6 +327,7 @@ class FileTransferService {
     required String targetDeviceIP,
     required String filePath,
     required String fileName,
+    int? targetDevicePort, // Prefer receiver's advertised port if known
   }) async {
     try {
       final file = File(filePath);
@@ -363,8 +364,14 @@ class FileTransferService {
       bool sent = false;
       Exception? lastError;
 
-      // First try the primary port, then fall back to others if needed
-      final portsToTry = [getPrimaryPort(), ..._fileTransferPorts.skip(1)];
+      // Build a prioritized port list: preferred (if provided), current server port, then others
+      final Set<int> portsSet = {
+        if (targetDevicePort != null) targetDevicePort,
+        getPrimaryPort(),
+        _currentPort,
+        ..._fileTransferPorts,
+      };
+      final portsToTry = portsSet.toList();
       for (final port in portsToTry) {
         final client = http.Client();
         try {
