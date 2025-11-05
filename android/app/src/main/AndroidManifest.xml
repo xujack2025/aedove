@@ -6,7 +6,9 @@
     <!-- Required for receiving multicast DNS packets (mDNS/Bonjour) -->
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
     <!-- Android 13+ Nearby Wi-Fi permission (runtime) for local network discovery without location) -->
-    <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES" />
+    <uses-permission
+        android:name="android.permission.NEARBY_WIFI_DEVICES"
+        android:usesPermissionFlags="neverForLocation" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />

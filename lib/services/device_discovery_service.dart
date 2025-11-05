@@ -213,12 +213,13 @@ class DeviceDiscoveryService {
         name: '${deviceInfo.name}_${deviceInfo.id.substring(0, 8)}',
         type: _serviceType,
         port:
-            FileTransferService.getPrimaryPort(), // Use the file transfer port
+            FileTransferService.getPrimaryPort(), // Advertise file transfer port
         attributes: {
+          // Use short TXT keys (Android NSD discourages > 9 chars)
           'id': deviceInfo.id,
           'ip': deviceInfo.ip,
-          'udp_port': _udpPort.toString(),
-          'transfer_port': FileTransferService.getPrimaryPort().toString(),
+          'tport': FileTransferService.getPrimaryPort().toString(),
+          'uport': _udpPort.toString(),
         },
       );
 
@@ -269,7 +270,8 @@ class DeviceDiscoveryService {
             print('Service details: ${event.service?.toJson()}');
           }
           if (event.toString().contains('Found') ||
-              event.toString().contains('Resolved')) {
+              event.toString().contains('Resolved') ||
+              event.toString().contains('Updated')) {
             final service = event.service!;
             // We include IP/ports in attributes, so resolution is optional. Handle as-is.
             await _handleDiscoveredService(service);
@@ -568,14 +570,14 @@ class DeviceDiscoveryService {
         }
       }
 
-      // Prefer transfer_port for actual file transfers, then udp_port, then service.port
+      // Prefer transfer port (tport), then service.port, then uport, then fallback
       int port = service.port != 0 ? service.port : _mdnsPort;
-      final transferPortAttr = attributes['transfer_port'];
-      final udpPortAttr = attributes['udp_port'];
-      if (transferPortAttr != null) {
-        port = int.tryParse(transferPortAttr.toString()) ?? port;
-      } else if (udpPortAttr != null) {
-        port = int.tryParse(udpPortAttr.toString()) ?? port;
+      final tportAttr = attributes['tport'];
+      final uportAttr = attributes['uport'];
+      if (tportAttr != null) {
+        port = int.tryParse(tportAttr.toString()) ?? port;
+      } else if (uportAttr != null) {
+        port = int.tryParse(uportAttr.toString()) ?? port;
       }
 
       // If we have an IP address, create the device info
