@@ -30,6 +30,8 @@ class MediaStoreService {
 
     if (Platform.isAndroid) {
       return _saveAndroidFile(fileName, bytes);
+    } else if (Platform.isWindows) {
+      return _saveWindowsFile(fileName, bytes);
     } else if (Platform.isMacOS) {
       return _saveMacOSFile(fileName, bytes);
     } else {
@@ -75,6 +77,40 @@ class MediaStoreService {
     } catch (e) {
       print('Error saving to gallery: $e');
       return null;
+    }
+  }
+
+  /// Save file in Windows Downloads directory
+  static Future<String> _saveWindowsFile(
+    String fileName,
+    List<int> bytes,
+  ) async {
+    final directory = await getDownloadsDirectory();
+    if (directory == null) {
+      // Fallback to user profile Downloads path if provider fails
+      final home =
+          Platform.environment['USERPROFILE'] ?? Directory.current.path;
+      final fallback = Directory(path.join(home, 'Downloads'));
+      if (!await fallback.exists()) {
+        await fallback.create(recursive: true);
+      }
+      final filePath = path.join(fallback.path, fileName);
+      final uniquePath = await _getUniqueFilePath(filePath);
+      final file = File(uniquePath);
+      await file.writeAsBytes(bytes);
+      return uniquePath;
+    }
+
+    final filePath = path.join(directory.path, fileName);
+    final uniquePath = await _getUniqueFilePath(filePath);
+    final file = File(uniquePath);
+
+    try {
+      await file.writeAsBytes(bytes);
+      return uniquePath;
+    } catch (e) {
+      print('Error saving file on Windows: $e');
+      throw Exception('Failed to save file: $e');
     }
   }
 
