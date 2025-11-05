@@ -64,11 +64,11 @@ class BackgroundService {
       }
     }
 
-    // Start device discovery service
-    await DeviceDiscoveryService.start();
-
-    // Start file transfer service
+    // Start file transfer service first so discovery can advertise correct port
     await FileTransferService.start();
+
+    // Start device discovery service after server is ready
+    await DeviceDiscoveryService.start();
   }
 
   static Future<void> stop() async {

@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:uuid/uuid.dart';
 import 'package:network_info_plus/network_info_plus.dart';
+import 'package:multicast_dns/multicast_dns.dart';
 import 'package:cpshare/services/file_transfer_service.dart';
 
 class DeviceInfo {
@@ -121,6 +122,7 @@ class DeviceDiscoveryService {
     }
     await _startCleanupTimer();
     _startNetworkMonitoring();
+    _startAndroidMdnsFallback();
   }
 
   static Future<void> stop() async {
@@ -213,12 +215,12 @@ class DeviceDiscoveryService {
         name: '${deviceInfo.name}_${deviceInfo.id.substring(0, 8)}',
         type: _serviceType,
         port:
-            FileTransferService.getPrimaryPort(), // Advertise file transfer port
+            FileTransferService.getServerPort(), // Advertise actual file transfer port
         attributes: {
           // Use short TXT keys (Android NSD discourages > 9 chars)
           'id': deviceInfo.id,
           'ip': deviceInfo.ip,
-          'tport': FileTransferService.getPrimaryPort().toString(),
+          'tport': FileTransferService.getServerPort().toString(),
           'uport': _udpPort.toString(),
         },
       );
@@ -324,6 +326,87 @@ class DeviceDiscoveryService {
       print('Error starting mDNS service: $e');
       rethrow;
     }
+  }
+
+  // Android NSD can provide empty/incorrect TXT/port. Use multicast_dns as a fallback
+  static void _startAndroidMdnsFallback() {
+    _mdnsRefreshTimer?.cancel();
+    if (!Platform.isAndroid) return;
+    _mdnsRefreshTimer = Timer.periodic(const Duration(seconds: 8), (_) async {
+      if (!_isStarted) return;
+      try {
+        final client = MDnsClient();
+        await client.start();
+
+        // Query for our service type
+        await for (final ptr in client.lookup<PtrResourceRecord>(
+          ResourceRecordQuery.serverPointer(_serviceType),
+        )) {
+          final instance = ptr.domainName; // e.g., "Name._cpshare._tcp.local"
+
+          // Resolve SRV for port/target
+          SrvResourceRecord? srv;
+          await for (final s in client.lookup<SrvResourceRecord>(
+            ResourceRecordQuery.service(instance),
+          )) {
+            srv = s;
+            break;
+          }
+
+          // Resolve TXT for attributes
+          Map<String, String> txtMap = {};
+          await for (final txt in client.lookup<TxtResourceRecord>(
+            ResourceRecordQuery.text(instance),
+          )) {
+            final dynamic raw = txt.text;
+            final List<String> entries = raw is List<String>
+                ? raw
+                : raw is String
+                ? <String>[raw]
+                : <String>[];
+            for (final entry in entries) {
+              final idx = entry.indexOf('=');
+              if (idx > 0) {
+                final k = entry.substring(0, idx);
+                final v = entry.substring(idx + 1);
+                txtMap[k] = v;
+              }
+            }
+            break;
+          }
+
+          // Resolve A record for IPv4
+          String? ip;
+          if (srv != null) {
+            await for (final a in client.lookup<IPAddressResourceRecord>(
+              ResourceRecordQuery.addressIPv4(srv.target),
+            )) {
+              ip = a.address.address;
+              break;
+            }
+          }
+
+          final id = txtMap['id'] ?? '';
+          if (id.isEmpty || id == _currentDeviceId) continue;
+
+          final tport = int.tryParse(txtMap['tport'] ?? '') ?? (srv?.port ?? 0);
+          final resolvedIp = txtMap['ip'] ?? ip;
+          if (resolvedIp == null || resolvedIp.isEmpty || tport <= 0) continue;
+
+          final device = DeviceInfo(
+            id: id,
+            name: instance.split('._').first,
+            ip: resolvedIp,
+            port: tport,
+            lastSeen: DateTime.now(),
+          );
+          _updateDiscoveredDevice(device);
+        }
+        client.stop();
+      } catch (e) {
+        if (_verbose) print('multicast_dns fallback error: $e');
+      }
+    });
   }
 
   static Future<void> _startUdpBroadcast() async {

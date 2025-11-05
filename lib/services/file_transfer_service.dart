@@ -58,6 +58,9 @@ class FileTransferService {
 
   /// Get the primary port used for file transfers
   static int getPrimaryPort() => _fileTransferPorts[0];
+
+  /// Get the actual bound server port
+  static int getServerPort() => _currentPort;
   static HttpServer? _server;
   static final Map<String, FileTransferRequest> _pendingRequests = {};
   // Map of outgoing request id -> local file path (used by sender)
