@@ -55,6 +55,9 @@ class FileTransferRequest {
 class FileTransferService {
   static const List<int> _fileTransferPorts = [8081, 8082, 8083, 8084, 8085];
   static int _currentPort = _fileTransferPorts[0];
+
+  /// Get the primary port used for file transfers
+  static int getPrimaryPort() => _fileTransferPorts[0];
   static HttpServer? _server;
   static final Map<String, FileTransferRequest> _pendingRequests = {};
   // Map of outgoing request id -> local file path (used by sender)
@@ -86,7 +89,7 @@ class FileTransferService {
         _server = await HttpServer.bind(
           InternetAddress.anyIPv4,
           port,
-          shared: true // Enable socket sharing
+          shared: true, // Enable socket sharing
         );
         _currentPort = port;
         _server!.listen((HttpRequest request) {
@@ -99,7 +102,9 @@ class FileTransferService {
         continue;
       }
     }
-    throw Exception('Failed to bind file transfer server to any available port');
+    throw Exception(
+      'Failed to bind file transfer server to any available port',
+    );
   }
 
   static Future<void> _handleFileTransferRequest(HttpRequest request) async {
@@ -358,7 +363,9 @@ class FileTransferService {
       bool sent = false;
       Exception? lastError;
 
-      for (final port in _fileTransferPorts) {
+      // First try the primary port, then fall back to others if needed
+      final portsToTry = [getPrimaryPort(), ..._fileTransferPorts.skip(1)];
+      for (final port in portsToTry) {
         final client = http.Client();
         try {
           final uri = Uri(
@@ -369,11 +376,13 @@ class FileTransferService {
           );
           print('Trying to send request to: $uri');
 
-          final response = await client.post(
-            uri,
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode(transferRequest.toJson()),
-          ).timeout(const Duration(seconds: 2));
+          final response = await client
+              .post(
+                uri,
+                headers: {'Content-Type': 'application/json'},
+                body: jsonEncode(transferRequest.toJson()),
+              )
+              .timeout(const Duration(seconds: 2));
 
           if (response.statusCode == 200) {
             print('Successfully sent file transfer request to port $port');
@@ -385,7 +394,9 @@ class FileTransferService {
             sent = true;
             break;
           } else {
-            print('Got non-200 response from port $port: ${response.statusCode}');
+            print(
+              'Got non-200 response from port $port: ${response.statusCode}',
+            );
           }
         } catch (e) {
           lastError = e as Exception;
@@ -422,11 +433,13 @@ class FileTransferService {
         final client = http.Client();
         try {
           print('Trying to send accept request to port $port');
-          final response = await client.post(
-            Uri.parse('http://${request.ipAddress}:$port/accept'),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({'request_id': requestId}),
-          ).timeout(const Duration(seconds: 2));
+          final response = await client
+              .post(
+                Uri.parse('http://${request.ipAddress}:$port/accept'),
+                headers: {'Content-Type': 'application/json'},
+                body: jsonEncode({'request_id': requestId}),
+              )
+              .timeout(const Duration(seconds: 2));
 
           if (response.statusCode == 200) {
             print('Successfully sent accept request to port $port');
@@ -465,11 +478,13 @@ class FileTransferService {
         final client = http.Client();
         try {
           print('Trying to send deny request to port $port');
-          final response = await client.post(
-            Uri.parse('http://${request.ipAddress}:$port/deny'),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({'request_id': requestId}),
-          ).timeout(const Duration(seconds: 2));
+          final response = await client
+              .post(
+                Uri.parse('http://${request.ipAddress}:$port/deny'),
+                headers: {'Content-Type': 'application/json'},
+                body: jsonEncode({'request_id': requestId}),
+              )
+              .timeout(const Duration(seconds: 2));
 
           if (response.statusCode == 200) {
             print('Successfully sent deny request to port $port');

@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:uuid/uuid.dart';
 import 'package:network_info_plus/network_info_plus.dart';
+import 'package:cpshare/services/file_transfer_service.dart';
 
 class DeviceInfo {
   final String id;
@@ -195,15 +196,17 @@ class DeviceDiscoveryService {
 
       print('Device info: ${deviceInfo.toJson()}');
 
-      // Create the service with a unique name
+      // Create the service with a unique name and file transfer port
       final service = BonsoirService(
         name: '${deviceInfo.name}_${deviceInfo.id.substring(0, 8)}',
         type: _serviceType,
-        port: _mdnsPort,
+        port:
+            FileTransferService.getPrimaryPort(), // Use the file transfer port
         attributes: {
           'id': deviceInfo.id,
           'ip': deviceInfo.ip,
           'udp_port': _udpPort.toString(),
+          'transfer_port': FileTransferService.getPrimaryPort().toString(),
         },
       );
 
