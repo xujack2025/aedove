@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:cpshare/services/device_discovery_service.dart';
 import 'package:cpshare/services/file_transfer_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:path/path.dart' as p;
 
 class SendTab extends StatefulWidget {
   const SendTab({super.key});
@@ -204,7 +205,7 @@ class _SendTabState extends State<SendTab> {
           targetDeviceId: device.id,
           targetDeviceIP: device.ip,
           filePath: file.path,
-          fileName: file.path.split('/').last,
+          fileName: p.basename(file.path),
           targetDevicePort: device.port,
         );
       }
@@ -324,7 +325,7 @@ class _SendTabState extends State<SendTab> {
                             return ListTile(
                               leading: const Icon(Icons.insert_drive_file),
                               title: Text(
-                                file.path.split('/').last,
+                                p.basename(file.path),
                                 overflow: TextOverflow.ellipsis,
                               ),
                               subtitle: Text(
