@@ -670,17 +670,24 @@ class DeviceDiscoveryService {
         port = int.tryParse(uportAttr.toString()) ?? port;
       }
 
-      // If we have an IP address, create the device info
-      if (serviceIp != null) {
-        final deviceInfo = DeviceInfo(
-          id: serviceId ?? const Uuid().v4(),
-          name: service.name,
-          ip: serviceIp,
-          port: port,
-          lastSeen: DateTime.now(),
-        );
-        _updateDiscoveredDevice(deviceInfo);
+      // Ensure we have the mandatory data we need to establish a connection
+      if (serviceId == null || serviceIp == null || port <= 0) {
+        if (_verbose) {
+          print(
+            'Ignoring mDNS record due to missing data. id: $serviceId, ip: $serviceIp, port: $port',
+          );
+        }
+        return;
       }
+
+      final deviceInfo = DeviceInfo(
+        id: serviceId,
+        name: service.name,
+        ip: serviceIp,
+        port: port,
+        lastSeen: DateTime.now(),
+      );
+      _updateDiscoveredDevice(deviceInfo);
     } catch (e) {
       if (_verbose) print('Error handling discovered service: $e');
     }
@@ -709,7 +716,16 @@ class DeviceDiscoveryService {
     if (deviceInfo.id == _currentDeviceId) {
       return;
     }
-    // Deduplicate by IP: if an entry with same IP exists under a different id, replace it
+
+    // Ignore records missing a usable transfer port
+    if (deviceInfo.port <= 0) {
+      if (_verbose) {
+        print('Ignoring device without valid port: ${deviceInfo.toJson()}');
+      }
+      return;
+    }
+
+    // Deduplicate by IP. Retain the entry that contains the most useful information (valid port wins)
     String existingKey = '';
     for (final e in _discoveredDevices.entries) {
       if (e.value.ip == deviceInfo.ip && e.key != deviceInfo.id) {
@@ -718,8 +734,14 @@ class DeviceDiscoveryService {
       }
     }
     if (existingKey.isNotEmpty) {
+      final existing = _discoveredDevices[existingKey]!;
+      // If current record lacks port but existing has one, keep existing
+      if (existing.port > 0 && deviceInfo.port <= 0) {
+        return;
+      }
       _discoveredDevices.remove(existingKey);
     }
+
     _discoveredDevices[deviceInfo.id] = deviceInfo;
     _devicesController.add(_discoveredDevices.values.toList());
     if (_verbose) print('Updated device: ${deviceInfo.toJson()}');
