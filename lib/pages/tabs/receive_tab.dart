@@ -36,9 +36,11 @@ class _ReceiveTabState extends State<ReceiveTab> {
   void _setupStreams() {
     // Listen to device discovery stream
     DeviceDiscoveryService.devicesStream.listen((devices) {
-      final filtered = _deviceId.isNotEmpty
-          ? devices.where((d) => d.id != _deviceId).toList()
-          : devices;
+      final filtered = devices.where((d) {
+        if (_deviceId.isNotEmpty && d.id == _deviceId) return false;
+        if (_ipAddress != 'Unknown' && d.ip == _ipAddress) return false;
+        return true;
+      }).toList();
       if (mounted) {
         setState(() {
           _discoveredDevices = filtered;
