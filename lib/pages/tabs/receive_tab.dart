@@ -52,13 +52,12 @@ class _ReceiveTabState extends State<ReceiveTab> {
     FileTransferService.fileSavedStream.listen((path) {
       if (mounted) {
         setState(() {
-          // Show only the file name instead of full path
-          _lastDownloadedPath = p.basename(path);
+          _lastDownloadedPath = path;
         });
         try {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Saved: ${p.basename(path)}'),
+              content: Text('File saved to: $path'),
               duration: const Duration(seconds: 4),
             ),
           );
@@ -326,20 +325,20 @@ class _ReceiveTabState extends State<ReceiveTab> {
             ],
 
             // Auto-receive toggle
-            Card(
-              child: SwitchListTile(
-                title: const Text('Auto-receive files'),
-                subtitle: const Text(
-                  'Automatically accept files from trusted devices',
-                ),
-                value: _isReceiving,
-                onChanged: (value) {
-                  setState(() {
-                    _isReceiving = value;
-                  });
-                },
-              ),
-            ),
+            // Card(
+            //   child: SwitchListTile(
+            //     title: const Text('Auto-receive files'),
+            //     subtitle: const Text(
+            //       'Automatically accept files from trusted devices',
+            //     ),
+            //     value: _isReceiving,
+            //     onChanged: (value) {
+            //       setState(() {
+            //         _isReceiving = value;
+            //       });
+            //     },
+            //   ),
+            // ),
           ],
         ),
       ),

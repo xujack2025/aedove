@@ -36,7 +36,7 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage>
     with SingleTickerProviderStateMixin {
-  HomeTab _currentTab = HomeTab.receive;
+  HomeTab _currentTab = HomeTab.send;
   late final AnimationController _refreshController = AnimationController(
     vsync: this,
     duration: const Duration(seconds: 1),

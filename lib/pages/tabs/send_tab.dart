@@ -240,19 +240,16 @@ class _SendTabState extends State<SendTab> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Icon(
-              Icons.send,
-              size: 80,
-              color: Theme.of(context).colorScheme.primary,
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Selection',
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
+                const SizedBox(height: 8),
+              ],
             ),
-            const SizedBox(height: 24),
-            Text(
-              'Send Files',
-              style: Theme.of(context).textTheme.headlineMedium,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 32),
-
             // File Selection
             if (Platform.isAndroid || Platform.isIOS) ...[
               Row(
@@ -342,6 +339,35 @@ class _SendTabState extends State<SendTab> {
               const SizedBox(height: 16),
             ],
 
+            // No files selected
+            // if (_selectedFiles.isEmpty) ...[
+            //   Card(
+            //     child: Padding(
+            //       padding: const EdgeInsets.all(32.0),
+            //       child: Column(
+            //         children: [
+            //           Icon(
+            //             Icons.cloud_upload,
+            //             size: 64,
+            //             color: Colors.grey[400],
+            //           ),
+            //           const SizedBox(height: 16),
+            //           Text(
+            //             'No files selected',
+            //             style: Theme.of(context).textTheme.titleMedium,
+            //           ),
+            //           const SizedBox(height: 8),
+            //           Text(
+            //             'Tap "Select Files" or "Select Media" to choose items to send',
+            //             style: Theme.of(context).textTheme.bodyMedium,
+            //             textAlign: TextAlign.center,
+            //           ),
+            //         ],
+            //       ),
+            //     ),
+            //   ),
+            // ],
+
             // Discovered Devices
             if (_discoveredDevices.isNotEmpty) ...[
               Card(
@@ -421,35 +447,6 @@ class _SendTabState extends State<SendTab> {
                       const SizedBox(height: 8),
                       Text(
                         'Make sure other devices are connected to the same WiFi network and have CPS Share running',
-                        style: Theme.of(context).textTheme.bodyMedium,
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-
-            // No files selected
-            if (_selectedFiles.isEmpty) ...[
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(32.0),
-                  child: Column(
-                    children: [
-                      Icon(
-                        Icons.cloud_upload,
-                        size: 64,
-                        color: Colors.grey[400],
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'No files selected',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Tap "Select Files" or "Select Media" to choose items to send',
                         style: Theme.of(context).textTheme.bodyMedium,
                         textAlign: TextAlign.center,
                       ),
