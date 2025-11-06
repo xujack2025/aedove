@@ -19,9 +19,10 @@ class ReceiveTab extends StatefulWidget {
 class _ReceiveTabState extends State<ReceiveTab> {
   bool _isReceiving = false;
   String _deviceName = 'My Device';
+  // ignore: unused_field
   String _deviceId = '';
   String _ipAddress = 'Unknown';
-  List<DeviceInfo> _discoveredDevices = [];
+  // List<DeviceInfo> _discoveredDevices = []; // removed, no longer shown
   List<FileTransferRequest> _pendingRequests = [];
   bool _permissionsPromptShown = false;
   String _lastDownloadedPath = '';
@@ -35,18 +36,8 @@ class _ReceiveTabState extends State<ReceiveTab> {
 
   void _setupStreams() {
     // Listen to device discovery stream
-    DeviceDiscoveryService.devicesStream.listen((devices) {
-      final filtered = devices.where((d) {
-        if (_deviceId.isNotEmpty && d.id == _deviceId) return false;
-        if (_ipAddress != 'Unknown' && d.ip == _ipAddress) return false;
-        return true;
-      }).toList();
-      if (mounted) {
-        setState(() {
-          _discoveredDevices = filtered;
-        });
-      }
-    });
+    // No UI usage for discovered devices on Receive tab anymore; keep listener empty to retain service.
+    DeviceDiscoveryService.devicesStream.listen((_) {});
 
     // Listen to file transfer requests stream
     FileTransferService.requestsStream.listen((requests) {
@@ -249,45 +240,6 @@ class _ReceiveTabState extends State<ReceiveTab> {
             ),
 
             const SizedBox(height: 16),
-
-            // Discovered Devices
-            if (_discoveredDevices.isNotEmpty) ...[
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Discovered Devices (${_discoveredDevices.length})',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 8),
-                      ListView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: _discoveredDevices.length,
-                        itemBuilder: (context, index) {
-                          final device = _discoveredDevices[index];
-                          return ListTile(
-                            leading: const Icon(Icons.device_hub),
-                            title: Text(device.name),
-                            subtitle: Text('${device.ip}:${device.port}'),
-                            trailing: Icon(
-                              Icons.wifi,
-                              color: device.isOnline
-                                  ? Colors.green
-                                  : Colors.grey,
-                            ),
-                          );
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-            ],
 
             // Pending File Transfer Requests
             if (_pendingRequests.isNotEmpty) ...[

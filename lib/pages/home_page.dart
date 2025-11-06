@@ -34,8 +34,14 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage>
+    with SingleTickerProviderStateMixin {
   HomeTab _currentTab = HomeTab.receive;
+  late final AnimationController _refreshController = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 1),
+  );
+  bool _refreshing = false;
 
   @override
   void initState() {
@@ -95,6 +101,21 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  Future<void> _refreshDiscovery() async {
+    if (_refreshing) return;
+    setState(() => _refreshing = true);
+    _refreshController.repeat();
+    try {
+      await DeviceDiscoveryService.stop();
+      await DeviceDiscoveryService.start();
+    } catch (_) {}
+    if (mounted) {
+      _refreshController.stop();
+      _refreshController.reset();
+      setState(() => _refreshing = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -103,33 +124,13 @@ class _HomePageState extends State<HomePage> {
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         centerTitle: true,
         actions: [
-          // Show number of discovered devices
-          StreamBuilder<List<DeviceInfo>>(
-            stream: DeviceDiscoveryService.devicesStream,
-            builder: (context, snapshot) {
-              final deviceCount = snapshot.data?.length ?? 0;
-              if (deviceCount > 0) {
-                return Container(
-                  margin: const EdgeInsets.only(right: 16),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.green,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    '$deviceCount',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                );
-              }
-              return const SizedBox.shrink();
-            },
+          IconButton(
+            tooltip: 'Refresh devices',
+            onPressed: _refreshDiscovery,
+            icon: RotationTransition(
+              turns: _refreshController,
+              child: const Icon(Icons.refresh),
+            ),
           ),
         ],
       ),
@@ -149,5 +150,11 @@ class _HomePageState extends State<HomePage> {
         }).toList(),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _refreshController.dispose();
+    super.dispose();
   }
 }

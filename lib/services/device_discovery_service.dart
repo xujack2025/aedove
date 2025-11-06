@@ -123,6 +123,7 @@ class DeviceDiscoveryService {
     await _startCleanupTimer();
     _startNetworkMonitoring();
     _startAndroidMdnsFallback();
+    _startWindowsMdnsFallback();
   }
 
   static Future<void> stop() async {
@@ -405,6 +406,73 @@ class DeviceDiscoveryService {
         client.stop();
       } catch (e) {
         if (_verbose) print('multicast_dns fallback error: $e');
+      }
+    });
+  }
+
+  static void _startWindowsMdnsFallback() {
+    if (!Platform.isWindows) return;
+    _mdnsRefreshTimer?.cancel();
+    _mdnsRefreshTimer = Timer.periodic(const Duration(seconds: 8), (_) async {
+      if (!_isStarted) return;
+      try {
+        final client = MDnsClient();
+        await client.start();
+        await for (final ptr in client.lookup<PtrResourceRecord>(
+          ResourceRecordQuery.serverPointer(_serviceType),
+        )) {
+          final instance = ptr.domainName;
+          SrvResourceRecord? srv;
+          await for (final s in client.lookup<SrvResourceRecord>(
+            ResourceRecordQuery.service(instance),
+          )) {
+            srv = s;
+            break;
+          }
+          Map<String, String> txtMap = {};
+          await for (final txt in client.lookup<TxtResourceRecord>(
+            ResourceRecordQuery.text(instance),
+          )) {
+            final dynamic raw = txt.text;
+            final List<String> entries = raw is List<String>
+                ? raw
+                : raw is String
+                ? <String>[raw]
+                : <String>[];
+            for (final entry in entries) {
+              final idx = entry.indexOf('=');
+              if (idx > 0) {
+                txtMap[entry.substring(0, idx)] = entry.substring(idx + 1);
+              }
+            }
+            break;
+          }
+          String? ip;
+          if (srv != null) {
+            await for (final a in client.lookup<IPAddressResourceRecord>(
+              ResourceRecordQuery.addressIPv4(srv.target),
+            )) {
+              ip = a.address.address;
+              break;
+            }
+          }
+          final id = txtMap['id'] ?? '';
+          if (id.isEmpty || id == _currentDeviceId) continue;
+          final tport = int.tryParse(txtMap['tport'] ?? '') ?? (srv?.port ?? 0);
+          final resolvedIp = txtMap['ip'] ?? ip;
+          if (resolvedIp == null || resolvedIp.isEmpty || tport <= 0) continue;
+          final device = DeviceInfo(
+            id: id,
+            name: instance.split('._').first,
+            ip: resolvedIp,
+            port: tport,
+            lastSeen: DateTime.now(),
+          );
+          _updateDiscoveredDevice(device);
+        }
+        client.stop();
+      } catch (e) {
+        if (_verbose) print('windows multicast_dns fallback error: $e');
       }
     });
   }
