@@ -39,7 +39,7 @@ class _HomePageState extends State<HomePage>
   HomeTab _currentTab = HomeTab.send;
   late final AnimationController _refreshController = AnimationController(
     vsync: this,
-    duration: const Duration(seconds: 1),
+    duration: const Duration(seconds: 2),
   );
   bool _refreshing = false;
 
@@ -120,12 +120,12 @@ class _HomePageState extends State<HomePage>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('CP Share'),
+        title: const Text('AeDrove'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         centerTitle: true,
         actions: [
           IconButton(
-            tooltip: 'Refresh devices',
+            tooltip: 'Refresh Device Discovery',
             onPressed: _refreshDiscovery,
             icon: RotationTransition(
               turns: _refreshController,

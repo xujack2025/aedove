@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:path/path.dart' as p;
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:network_info_plus/network_info_plus.dart';
 import 'package:cpshare/services/device_discovery_service.dart';
@@ -17,7 +16,6 @@ class ReceiveTab extends StatefulWidget {
 }
 
 class _ReceiveTabState extends State<ReceiveTab> {
-  bool _isReceiving = false;
   String _deviceName = 'My Device';
   // ignore: unused_field
   String _deviceId = '';
@@ -200,10 +198,12 @@ class _ReceiveTabState extends State<ReceiveTab> {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.all(16.0),
+      padding: const EdgeInsets.symmetric(vertical: 0, horizontal: 24.0),
       child: SingleChildScrollView(
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            const SizedBox(height: 8),
             // Device Status Card
             Card(
               child: Padding(
