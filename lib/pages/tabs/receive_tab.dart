@@ -2,10 +2,10 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:network_info_plus/network_info_plus.dart';
-import 'package:cpshare/services/device_discovery_service.dart';
-import 'package:cpshare/services/file_transfer_service.dart';
+import 'package:aedove/services/device_discovery_service.dart';
+import 'package:aedove/services/file_transfer_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:cpshare/services/permission_service.dart';
+import 'package:aedove/services/permission_service.dart';
 import 'package:permission_handler/permission_handler.dart' as ph;
 
 class ReceiveTab extends StatefulWidget {

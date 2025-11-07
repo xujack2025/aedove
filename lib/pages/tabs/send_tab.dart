@@ -3,8 +3,8 @@ import 'package:file_picker/file_picker.dart';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:cpshare/services/device_discovery_service.dart';
-import 'package:cpshare/services/file_transfer_service.dart';
+import 'package:aedove/services/device_discovery_service.dart';
+import 'package:aedove/services/file_transfer_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path/path.dart' as p;
 

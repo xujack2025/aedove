@@ -2,9 +2,9 @@ import 'dart:io';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
-import 'package:cpshare/services/device_discovery_service.dart';
-import 'package:cpshare/services/file_transfer_service.dart';
-import 'package:cpshare/services/permission_service.dart';
+import 'package:aedove/services/device_discovery_service.dart';
+import 'package:aedove/services/file_transfer_service.dart';
+import 'package:aedove/services/permission_service.dart';
 
 class BackgroundService {
   static const String _deviceIdKey = 'device_id';

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 // import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:cpshare/pages/home_page.dart';
-import 'package:cpshare/services/background_service.dart';
-import 'package:cpshare/services/notification_service.dart';
+import 'package:aedove/pages/home_page.dart';
+import 'package:aedove/services/background_service.dart';
+import 'package:aedove/services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();

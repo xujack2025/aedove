@@ -1,10 +1,10 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:cpshare/pages/tabs/receive_tab.dart';
-import 'package:cpshare/pages/tabs/send_tab.dart';
-import 'package:cpshare/pages/tabs/settings_tab.dart';
-import 'package:cpshare/services/permission_service.dart';
-import 'package:cpshare/services/device_discovery_service.dart';
+import 'package:aedove/pages/tabs/receive_tab.dart';
+import 'package:aedove/pages/tabs/send_tab.dart';
+import 'package:aedove/pages/tabs/settings_tab.dart';
+import 'package:aedove/services/permission_service.dart';
+import 'package:aedove/services/device_discovery_service.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 enum HomeTab {
@@ -130,7 +130,7 @@ class _HomePageState extends State<HomePage>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('AeDrove'),
+        title: const Text('AeDove'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         centerTitle: true,
         actions: [

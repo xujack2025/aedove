@@ -4,8 +4,8 @@ import 'dart:async';
 import 'dart:developer' as dev;
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:cpshare/services/notification_service.dart';
-import 'package:cpshare/services/media_store_service.dart';
+import 'package:aedove/services/notification_service.dart';
+import 'package:aedove/services/media_store_service.dart';
 
 class FileTransferRequest {
   final String id;

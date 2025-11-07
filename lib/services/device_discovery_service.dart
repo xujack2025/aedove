@@ -7,7 +7,7 @@ import 'package:device_info_plus/device_info_plus.dart';
 import 'package:uuid/uuid.dart';
 import 'package:network_info_plus/network_info_plus.dart';
 import 'package:multicast_dns/multicast_dns.dart';
-import 'package:cpshare/services/file_transfer_service.dart';
+import 'package:aedove/services/file_transfer_service.dart';
 
 class DeviceInfo {
   final String id;
