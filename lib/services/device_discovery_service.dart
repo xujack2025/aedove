@@ -46,7 +46,7 @@ class DeviceInfo {
 }
 
 class DeviceDiscoveryService {
-  static const String _serviceType = '_cpshare._tcp';
+  static const String _serviceType = '_aedove._tcp';
   static String? _currentDeviceId;
   static String? _currentDeviceIp; // cache own IP to avoid processing self
   static const int _mdnsPort = 53317; // Port for mDNS service
@@ -343,7 +343,7 @@ class DeviceDiscoveryService {
         await for (final ptr in client.lookup<PtrResourceRecord>(
           ResourceRecordQuery.serverPointer(_serviceType),
         )) {
-          final instance = ptr.domainName; // e.g., "Name._cpshare._tcp.local"
+          final instance = ptr.domainName; // e.g., "Name._aedove._tcp.local"
 
           // Resolve SRV for port/target
           SrvResourceRecord? srv;

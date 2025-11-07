@@ -13,7 +13,7 @@
 		<key>CFBundleInfoDictionaryVersion</key>
 		<string>6.0</string>
 		<key>CFBundleName</key>
-		<string>cpshare</string>
+		<string>aedove</string>
 		<key>CFBundlePackageType</key>
 		<string>APPL</string>
 		<key>CFBundleShortVersionString</key>
@@ -62,8 +62,8 @@
 		<string>The app uses the local network to find and connect to nearby devices.</string>
 		<key>NSBonjourServices</key>
 		<array>
-			<string>_cpshare._tcp</string>
-			<string>_cpshare._tcp.</string>
+			<string>_aedove._tcp</string>
+			<string>_aedove._tcp.</string>
 		</array>
 
 		<!-- share_handler -->

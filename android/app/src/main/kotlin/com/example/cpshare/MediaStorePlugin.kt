@@ -1,4 +1,4 @@
-package com.example.cpshare
+package com.aedove.app
 
 import android.content.Context
 import android.media.MediaScannerConnection
@@ -13,7 +13,7 @@ class MediaStorePlugin : FlutterPlugin, MethodCallHandler {
     private lateinit var context: Context
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
-        channel = MethodChannel(binding.binaryMessenger, "cpshare/media_store")
+        channel = MethodChannel(binding.binaryMessenger, "aedove/media_store")
         channel.setMethodCallHandler(this)
         context = binding.applicationContext
     }
