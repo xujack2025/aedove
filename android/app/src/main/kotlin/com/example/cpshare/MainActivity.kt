@@ -1,4 +1,4 @@
-package com.example.cpshare
+package com.aedove.app
 
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine

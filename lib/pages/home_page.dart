@@ -5,6 +5,7 @@ import 'package:cpshare/pages/tabs/send_tab.dart';
 import 'package:cpshare/pages/tabs/settings_tab.dart';
 import 'package:cpshare/services/permission_service.dart';
 import 'package:cpshare/services/device_discovery_service.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 enum HomeTab {
   receive(Icons.wifi),
@@ -52,7 +53,6 @@ class _HomePageState extends State<HomePage>
 
   Future<void> _requestPermissions() async {
     if (Platform.isAndroid) {
-      // Request storage permission on Android
       final hasStorage = await PermissionService.requestStoragePermission();
       if (!hasStorage && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -68,7 +68,17 @@ class _HomePageState extends State<HomePage>
 
     // Request location permission on mobile platforms
     if (Platform.isAndroid || Platform.isIOS) {
-      final hasLocation = await PermissionService.requestLocationPermission();
+      // 1. Check current status
+      final status = await Permission.locationWhenInUse.status;
+      bool hasLocation = status.isGranted;
+
+      // 2. If not granted, request permission
+      if (!hasLocation) {
+        final result = await Permission.locationWhenInUse.request();
+        hasLocation = result.isGranted;
+      }
+
+      // 3. Show warning only if still not granted
       if (!hasLocation && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
