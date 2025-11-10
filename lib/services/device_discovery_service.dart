@@ -882,7 +882,7 @@ class DeviceDiscoveryService {
     String deviceId = prefs.getString('device_id') ?? const Uuid().v4();
     await prefs.setString('device_id', deviceId);
 
-    String deviceName = prefs.getString('device_name') ?? 'CP Share Device';
+    String deviceName = prefs.getString('device_name') ?? 'AeDove Device';
 
     if (Platform.isAndroid) {
       final androidInfo = await deviceInfo.androidInfo;

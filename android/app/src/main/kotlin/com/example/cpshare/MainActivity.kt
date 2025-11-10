@@ -1,4 +1,4 @@
-package com.aedove.app
+package com.app.aedove
 
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine

@@ -1,35 +1,44 @@
 import 'dart:io';
+import 'package:flutter/material.dart';
 // import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:awesome_notifications/awesome_notifications.dart';
 
 class NotificationService {
   static Future<void> initialize() async {
     AwesomeNotifications().initialize(
-      null, // icon - use default app icon
+      'resource://drawable/ic_stat_aedove_logo', // Custom notification icon
       [
         NotificationChannel(
           channelKey: 'file_transfer',
           channelName: 'File Transfer',
           channelDescription: 'Notifications for incoming file transfers',
           importance: NotificationImportance.High,
+          defaultColor: Color(0xFF0175C2),
+          ledColor: Colors.white,
         ),
         NotificationChannel(
           channelKey: 'file_received',
           channelName: 'File Received',
           channelDescription: 'Notifications after receiving files',
-          importance: NotificationImportance.Default,
+          importance: NotificationImportance.High,
+          defaultColor: Color(0xFF0175C2),
+          ledColor: Colors.white,
         ),
         NotificationChannel(
           channelKey: 'file_sent',
           channelName: 'File Sent',
           channelDescription: 'Notifications after successfully sending files',
-          importance: NotificationImportance.Default,
+          importance: NotificationImportance.High,
+          defaultColor: Color(0xFF0175C2),
+          ledColor: Colors.white,
         ),
         NotificationChannel(
           channelKey: 'device_discovered',
           channelName: 'Device Discovery',
           channelDescription: 'Notifications when a device is found',
           importance: NotificationImportance.Low,
+          defaultColor: Color(0xFF0175C2),
+          ledColor: Colors.white,
         ),
       ],
     );
@@ -76,7 +85,7 @@ class NotificationService {
       content: NotificationContent(
         id: DateTime.now().millisecondsSinceEpoch % 100000,
         channelKey: 'file_sent',
-        title: '✅ File Sent Successfully',
+        title: 'File Sent Successfully',
         body: 'File: $fileName ($fileSize)',
         notificationLayout: NotificationLayout.Default,
         payload: {
@@ -97,12 +106,12 @@ class NotificationService {
     String notificationMessage;
     if (isIOS) {
       notificationMessage =
-          '📥 Saved to Documents\nFile: $fileName ($fileSize)';
+          'Saved to Documents\nFile: $fileName ($fileSize)';
     } else if (Platform.isWindows) {
       notificationMessage =
-          '📥 Saved to Downloads\nFile: $fileName ($fileSize)';
+          'Saved to Downloads\nFile: $fileName ($fileSize)';
     } else {
-      notificationMessage = '📥 File: $fileName ($fileSize)';
+      notificationMessage = 'File: $fileName ($fileSize)';
     }
 
     await AwesomeNotifications().createNotification(

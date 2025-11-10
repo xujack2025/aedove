@@ -1,4 +1,4 @@
-package com.aedove.app
+package com.app.aedove
 
 import android.content.Context
 import android.media.MediaScannerConnection

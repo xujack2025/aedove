@@ -35,7 +35,7 @@ class _CPSShareAppState extends State<CPSShareApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'CP Share',
+      title: 'AeDove',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
