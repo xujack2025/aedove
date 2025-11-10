@@ -53,16 +53,24 @@ class _HomePageState extends State<HomePage>
 
   Future<void> _requestPermissions() async {
     if (Platform.isAndroid) {
-      final hasStorage = await PermissionService.requestStoragePermission();
-      if (!hasStorage && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Storage permission is required for receiving files on Android',
+      // Check if permission is already granted or limited (limited access is acceptable)
+      final storageStatus = await Permission.storage.status;
+
+      // Only request if not already granted or limited
+      if (!storageStatus.isGranted && !storageStatus.isLimited) {
+        final hasStorage = await PermissionService.requestStoragePermission();
+
+        // Only show snackbar if permission was requested and denied (not limited)
+        if (!hasStorage && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Storage permission is required for receiving files on Android',
+              ),
+              backgroundColor: Colors.orange,
             ),
-            backgroundColor: Colors.orange,
-          ),
-        );
+          );
+        }
       }
     }
 
@@ -70,25 +78,38 @@ class _HomePageState extends State<HomePage>
     if (Platform.isAndroid || Platform.isIOS) {
       // 1. Check current status
       final status = await Permission.locationWhenInUse.status;
-      bool hasLocation = status.isGranted;
+      bool hasLocation = status.isGranted || status.isLimited;
 
-      // 2. If not granted, request permission
+      // On iOS, if permission is permanently denied, don't show warning
+      // because iOS can use Bonjour/mDNS without location permission
+      if (Platform.isIOS && status.isPermanentlyDenied) {
+        hasLocation = true; // Treat as OK for iOS
+      }
+
+      // 2. If not granted or limited, request permission
       if (!hasLocation) {
         final result = await Permission.locationWhenInUse.request();
-        hasLocation = result.isGranted;
-      }
+        hasLocation = result.isGranted || result.isLimited;
 
-      // 3. Show warning only if still not granted
-      if (!hasLocation && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Location permission may be needed for optimal device discovery',
+        // On iOS, permanently denied is OK (Bonjour/mDNS doesn't need it)
+        if (Platform.isIOS && result.isPermanentlyDenied) {
+          hasLocation = true;
+        }
+
+        // 3. Show warning only if permission was requested and still not granted/limited
+        // For iOS, don't show warning if permanently denied (it's OK)
+        if (!hasLocation && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Location permission may be needed for optimal device discovery',
+              ),
+              backgroundColor: Colors.orange,
             ),
-            backgroundColor: Colors.orange,
-          ),
-        );
+          );
+        }
       }
+      // If permission was already granted or limited, don't show any snackbar
     }
   }
 

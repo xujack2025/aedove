@@ -136,10 +136,25 @@ class _ReceiveTabState extends State<ReceiveTab> {
       return;
 
     try {
+      // Check current permission status before requesting
+      final storageStatus = Platform.isAndroid
+          ? await ph.Permission.storage.status
+          : ph.PermissionStatus.granted;
+      final locationStatus = Platform.isAndroid
+          ? await ph.Permission.location.status
+          : ph.PermissionStatus.granted;
+
+      // If both permissions are already granted or limited (limited access is acceptable), don't show any dialog
+      if ((storageStatus.isGranted || storageStatus.isLimited) &&
+          (locationStatus.isGranted || locationStatus.isLimited))
+        return;
+
+      // Request permissions
       final storageGranted = await PermissionService.requestStoragePermission();
       final locationGranted =
           await PermissionService.requestLocationPermission();
 
+      // If permissions are now granted, don't show the dialog
       if (storageGranted && locationGranted) return;
 
       // If we've already shown the prompt, don't spam the user.

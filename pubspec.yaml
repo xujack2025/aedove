@@ -65,3 +65,21 @@ flutter_launcher_icons:
     generate: true
     image_path: "assets/images/aedove-logo.png"
     icon_size: 256
+
+flutter_native_splash:
+  color: "#ffffff"
+  image: assets/images/aedove-logo-trans.png
+  color_dark: "#000000"
+  image_dark: assets/images/aedove-logo-trans.png
+  
+  android_12:
+    color: "#ffffff"
+    image: assets/images/aedove-logo-trans.png
+    icon_background_color: "#ffffff"
+    color_dark: "#000000"
+    image_dark: assets/images/aedove-logo-trans.png
+    icon_background_color_dark: "#000000"
+  
+  web: true
+  ios: true
+  android: true

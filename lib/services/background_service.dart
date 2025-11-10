@@ -49,6 +49,8 @@ class BackgroundService {
     if (!Platform.isMacOS) {
       // Request necessary runtime permissions before starting services.
       // Storage permission for saving received files, and location for discovery.
+      // Note: Both requestStoragePermission and requestLocationPermission
+      // return true for both granted and limited access.
       final storageOk = await PermissionService.requestStoragePermission();
       if (!storageOk) {
         print(
