@@ -4,6 +4,8 @@
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleDisplayName</key>
+	<string>AeDove</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIconFile</key>
@@ -14,8 +16,6 @@
 	<string>6.0</string>
 	<key>CFBundleName</key>
 	<string>$(PRODUCT_NAME)</string>
-    <key>CFBundleDisplayName</key>
-    <string>AeDove</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -24,31 +24,29 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
-	<key>NSHumanReadableCopyright</key>
-	<string>$(PRODUCT_COPYRIGHT)</string>
-	<key>NSMainNibFile</key>
-	<string>MainMenu</string>
-	<key>NSPrincipalClass</key>
-	<string>NSApplication</string>
-
-	<!-- Permissions -->
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>This app needs access to your photo library to save and load media.</string>
-	<key>NSDownloadsFolderUsageDescription</key>
-	<string>This app needs access to the Downloads folder to save received files.</string>
-	<key>NSDocumentsFolderUsageDescription</key>
-	<string>This app needs access to the Documents folder to share files.</string>
 	<key>NSDesktopFolderUsageDescription</key>
 	<string>This app needs access to the Desktop folder to save shared files.</string>
+	<key>NSDocumentsFolderUsageDescription</key>
+	<string>This app needs access to the Documents folder to share files.</string>
+	<key>NSDownloadsFolderUsageDescription</key>
+	<string>This app needs access to the Downloads folder to save received files.</string>
+	<key>NSHumanReadableCopyright</key>
+	<string>$(PRODUCT_COPYRIGHT)</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>The app uses the local network to find and connect to nearby devices.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>The app requires the local IP to communicate.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>The app requires the local IP to communicate.</string>
+	<key>NSMainNibFile</key>
+	<string>MainMenu</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>The app saves received media to the photo library.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>This app needs access to your photo library to save and load media.</string>
+	<key>NSPrincipalClass</key>
+	<string>NSApplication</string>
 	<key>NSRemovableVolumesUsageDescription</key>
 	<string>This app needs access to external drives and USBs to save or load files.</string>
-    <key>NSPhotoLibraryAddUsageDescription</key>
-    <string>The app saves received media to the photo library.</string>
-    <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-    <string>The app requires the local IP to communicate.</string>
-    <key>NSLocationWhenInUseUsageDescription</key>
-    <string>The app requires the local IP to communicate.</string>
-    <key>NSLocalNetworkUsageDescription</key>
-    <string>The app uses the local network to find and connect to nearby devices.</string>
 </dict>
 </plist>

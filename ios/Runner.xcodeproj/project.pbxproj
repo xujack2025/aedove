@@ -105,7 +105,6 @@
 				3AEBB9DAB4B4B42C823B482B /* Pods-RunnerTests.release.xcconfig */,
 				E25191A79128F78A3D71A4B2 /* Pods-RunnerTests.profile.xcconfig */,
 			);
-			name = Pods;
 			path = Pods;
 			sourceTree = "<group>";
 		};
@@ -493,11 +492,13 @@
 				DEVELOPMENT_TEAM = SQFKA29AZV;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = Runner/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = AeDove;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.aedove.app;
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.app.aedove;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_MODULE_INTERFACE = NO;
 				SWIFT_INSTALL_OBJC_HEADER = NO;
@@ -679,11 +680,13 @@
 				DEVELOPMENT_TEAM = SQFKA29AZV;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = Runner/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = AeDove;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.aedove.app;
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.app.aedove;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_MODULE_INTERFACE = NO;
 				SWIFT_INSTALL_OBJC_HEADER = NO;
@@ -705,11 +708,13 @@
 				DEVELOPMENT_TEAM = SQFKA29AZV;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = Runner/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = AeDove;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.aedove.app;
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.app.aedove;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_MODULE_INTERFACE = NO;
 				SWIFT_INSTALL_OBJC_HEADER = NO;
