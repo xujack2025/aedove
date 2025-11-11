@@ -33,6 +33,7 @@ dependencies:
   bonsoir: ^6.0.1
   path: ^1.8.3
   awesome_notifications: ^0.10.1
+  flutter_inappwebview: ^6.1.5
 
 
 dev_dependencies:
