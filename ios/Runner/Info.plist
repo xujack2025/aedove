@@ -45,15 +45,15 @@
 			<string>_aedove._tcp.</string>
 		</array>
 		<key>NSLocalNetworkUsageDescription</key>
-		<string>The app uses the local network to find and connect to nearby devices.</string>
+		<string>Discover nearby devices on the local WiFi to let users send and receive files. This is used only for device discovery and local transfers; no location, device list, or personal data is collected or sent to our servers.</string>
 		<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-		<string>The app requires the local IP to communicate.</string>
+		<string>Discover nearby devices on the local WiFi to let users send and receive files. This is used only for device discovery and local transfers; no location, device list, or personal data is collected or sent to our servers.</string>
 		<key>NSLocationWhenInUseUsageDescription</key>
-		<string>The app requires the local IP to communicate.</string>
+		<string>Discover nearby devices on the local WiFi to let users send and receive files. This is used only for device discovery and local transfers; no location, device list, or personal data is collected or sent to our servers.</string>
 		<key>NSPhotoLibraryAddUsageDescription</key>
-		<string>The app saves received media to the photo library.</string>
+		<string>Allow saving received photos and videos to your library. Items are saved only when you confirm.</string>
 		<key>NSPhotoLibraryUsageDescription</key>
-		<string>The app needs photo library access so that the user can select photos to share.</string>
+		<string>Allow selecting photos and videos to share with nearby devices. Photos are accessed only when you choose them and are not uploaded without permission.</string>
 		<key>UIApplicationSupportsIndirectInputEvents</key>
 		<true/>
 		<key>UIFileSharingEnabled</key>
