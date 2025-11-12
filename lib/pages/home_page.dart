@@ -187,11 +187,52 @@ class _HomePageState extends State<HomePage>
         }
       }
       // If permission was already granted or limited, don't show any snackbar
+      // Request location permission on mobile platforms
+      if (Platform.isAndroid || Platform.isIOS) {
+        // 1. Check current status
+        final status = await Permission.locationWhenInUse.status;
+        bool hasLocation = status.isGranted || status.isLimited;
+
+        // On iOS, if permission is permanently denied, don't show warning
+        // because iOS can use Bonjour/mDNS without location permission
+        if (Platform.isIOS && status.isPermanentlyDenied) {
+          hasLocation = true; // Treat as OK for iOS
+        }
+
+        // 2. If not granted or limited, request permission
+        if (!hasLocation) {
+          final result = await Permission.locationWhenInUse.request();
+          hasLocation = result.isGranted || result.isLimited;
+
+          // On iOS, permanently denied is OK (Bonjour/mDNS doesn't need it)
+          if (Platform.isIOS && result.isPermanentlyDenied) {
+            hasLocation = true;
+          }
+
+          // 3. Show warning only if permission was requested and still not granted/limited
+          // For iOS, don't show warning if permanently denied (it's OK)
+          if (!hasLocation && mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'Location permission may be needed for optimal device discovery',
+                ),
+                backgroundColor: Colors.orange,
+              ),
+            );
+          }
+        }
+        // If permission was already granted or limited, don't show any snackbar
+      }
     }
   }
 
   Future<void> _startDeviceDiscovery() async {
     try {
+      // Wait for permissions before starting discovery
+      await _requestPermissions();
+
+      // Start device discovery service
       // Wait for permissions before starting discovery
       await _requestPermissions();
 
