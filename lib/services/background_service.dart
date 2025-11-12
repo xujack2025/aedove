@@ -2,9 +2,9 @@ import 'dart:io';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
-import 'package:cpshare/services/device_discovery_service.dart';
-import 'package:cpshare/services/file_transfer_service.dart';
-import 'package:cpshare/services/permission_service.dart';
+import 'package:aedove/services/device_discovery_service.dart';
+import 'package:aedove/services/file_transfer_service.dart';
+import 'package:aedove/services/permission_service.dart';
 
 class BackgroundService {
   static const String _deviceIdKey = 'device_id';
@@ -49,6 +49,8 @@ class BackgroundService {
     if (!Platform.isMacOS) {
       // Request necessary runtime permissions before starting services.
       // Storage permission for saving received files, and location for discovery.
+      // Note: Both requestStoragePermission and requestLocationPermission
+      // return true for both granted and limited access.
       final storageOk = await PermissionService.requestStoragePermission();
       if (!storageOk) {
         print(
@@ -64,11 +66,11 @@ class BackgroundService {
       }
     }
 
-    // Start device discovery service
-    await DeviceDiscoveryService.start();
-
-    // Start file transfer service
+    // Start file transfer service first so discovery can advertise correct port
     await FileTransferService.start();
+
+    // Start device discovery service after server is ready
+    await DeviceDiscoveryService.start();
   }
 
   static Future<void> stop() async {

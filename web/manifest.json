@@ -1,11 +1,11 @@
 {
-    "name": "CP Share",
-    "short_name": "CP Share",
+    "name": "AeDove",
+    "short_name": "AeDove",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#ffffff",
     "theme_color": "#0175C2",
-    "description": "CP Share - Cross-platform file sharing.",
+    "description": "AeDove - Cross-platform file sharing.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

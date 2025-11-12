@@ -1,7 +1,7 @@
-name: cpshare
+name: aedove
 description: "A simple cross-platform file sharing app."
 publish_to: 'none'
-version: 1.0.0+1
+version: 1.0.0+3
 
 environment:
   sdk: ^3.9.2
@@ -51,16 +51,35 @@ flutter:
 flutter_launcher_icons:
   android: "launcher_icon"
   ios: true
-  image_path: "assets/images/CP_Share_3.png"
+  remove_alpha_ios: true
+  image_path: "assets/images/aedove-logo.png"
   web:
     generate: true
-    image_path: "assets/images/CP_Share_3.png"
+    image_path: "assets/images/aedove-logo.png"
     background_color: "#ffffff"
     theme_color: "#0175C2"
   macos:
     generate: true
-    image_path: "assets/images/CP_Share_3.png"
+    image_path: "assets/images/aedove-logo.png"
   windows:
     generate: true
-    image_path: "assets/images/CP_Share_3.png"
+    image_path: "assets/images/aedove-logo.png"
     icon_size: 256
+
+flutter_native_splash:
+  color: "#ffffff"
+  image: assets/images/aedove-logo-trans.png
+  color_dark: "#000000"
+  image_dark: assets/images/aedove-logo-trans.png
+  
+  android_12:
+    color: "#ffffff"
+    image: assets/images/aedove-logo-trans.png
+    icon_background_color: "#ffffff"
+    color_dark: "#000000"
+    image_dark: assets/images/aedove-logo-trans.png
+    icon_background_color_dark: "#000000"
+  
+  web: true
+  ios: true
+  android: true

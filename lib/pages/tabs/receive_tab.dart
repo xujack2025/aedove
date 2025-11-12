@@ -2,10 +2,10 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:network_info_plus/network_info_plus.dart';
-import 'package:cpshare/services/device_discovery_service.dart';
-import 'package:cpshare/services/file_transfer_service.dart';
+import 'package:aedove/services/device_discovery_service.dart';
+import 'package:aedove/services/file_transfer_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:cpshare/services/permission_service.dart';
+import 'package:aedove/services/permission_service.dart';
 import 'package:permission_handler/permission_handler.dart' as ph;
 
 class ReceiveTab extends StatefulWidget {
@@ -16,11 +16,11 @@ class ReceiveTab extends StatefulWidget {
 }
 
 class _ReceiveTabState extends State<ReceiveTab> {
-  bool _isReceiving = false;
   String _deviceName = 'My Device';
+  // ignore: unused_field
   String _deviceId = '';
   String _ipAddress = 'Unknown';
-  List<DeviceInfo> _discoveredDevices = [];
+  // List<DeviceInfo> _discoveredDevices = []; // removed, no longer shown
   List<FileTransferRequest> _pendingRequests = [];
   bool _permissionsPromptShown = false;
   String _lastDownloadedPath = '';
@@ -34,16 +34,8 @@ class _ReceiveTabState extends State<ReceiveTab> {
 
   void _setupStreams() {
     // Listen to device discovery stream
-    DeviceDiscoveryService.devicesStream.listen((devices) {
-      final filtered = _deviceId.isNotEmpty
-          ? devices.where((d) => d.id != _deviceId).toList()
-          : devices;
-      if (mounted) {
-        setState(() {
-          _discoveredDevices = filtered;
-        });
-      }
-    });
+    // No UI usage for discovered devices on Receive tab anymore; keep listener empty to retain service.
+    DeviceDiscoveryService.devicesStream.listen((_) {});
 
     // Listen to file transfer requests stream
     FileTransferService.requestsStream.listen((requests) {
@@ -83,7 +75,7 @@ class _ReceiveTabState extends State<ReceiveTab> {
             includeLinkLocal: false,
             type: InternetAddressType.IPv4,
           );
-          
+
           // Find the first non-loopback IPv4 address
           for (var interface in interfaces) {
             for (var addr in interface.addresses) {
@@ -137,13 +129,32 @@ class _ReceiveTabState extends State<ReceiveTab> {
 
   Future<void> _ensurePermissions() async {
     // Desktop platforms (Windows, macOS, Linux) and iOS handle permissions differently
-    if (Platform.isWindows || Platform.isMacOS || Platform.isLinux || Platform.isIOS) return;
+    if (Platform.isWindows ||
+        Platform.isMacOS ||
+        Platform.isLinux ||
+        Platform.isIOS)
+      return;
 
     try {
+      // Check current permission status before requesting
+      final storageStatus = Platform.isAndroid
+          ? await ph.Permission.storage.status
+          : ph.PermissionStatus.granted;
+      final locationStatus = Platform.isAndroid
+          ? await ph.Permission.location.status
+          : ph.PermissionStatus.granted;
+
+      // If both permissions are already granted or limited (limited access is acceptable), don't show any dialog
+      if ((storageStatus.isGranted || storageStatus.isLimited) &&
+          (locationStatus.isGranted || locationStatus.isLimited))
+        return;
+
+      // Request permissions
       final storageGranted = await PermissionService.requestStoragePermission();
       final locationGranted =
           await PermissionService.requestLocationPermission();
 
+      // If permissions are now granted, don't show the dialog
       if (storageGranted && locationGranted) return;
 
       // If we've already shown the prompt, don't spam the user.
@@ -172,7 +183,9 @@ class _ReceiveTabState extends State<ReceiveTab> {
                   },
                   child: const Text('Retry'),
                 ),
-                if (Platform.isAndroid || Platform.isIOS) // Only show Open Settings on mobile platforms
+                if (Platform.isAndroid ||
+                    Platform
+                        .isIOS) // Only show Open Settings on mobile platforms
                   TextButton(
                     onPressed: () async {
                       Navigator.of(context).pop();
@@ -200,10 +213,12 @@ class _ReceiveTabState extends State<ReceiveTab> {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.all(16.0),
+      padding: const EdgeInsets.symmetric(vertical: 0, horizontal: 24.0),
       child: SingleChildScrollView(
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            const SizedBox(height: 8),
             // Device Status Card
             Card(
               child: Padding(
@@ -239,45 +254,6 @@ class _ReceiveTabState extends State<ReceiveTab> {
             ),
 
             const SizedBox(height: 16),
-
-            // Discovered Devices
-            if (_discoveredDevices.isNotEmpty) ...[
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Discovered Devices (${_discoveredDevices.length})',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 8),
-                      ListView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: _discoveredDevices.length,
-                        itemBuilder: (context, index) {
-                          final device = _discoveredDevices[index];
-                          return ListTile(
-                            leading: const Icon(Icons.device_hub),
-                            title: Text(device.name),
-                            subtitle: Text('${device.ip}:${device.port}'),
-                            trailing: Icon(
-                              Icons.wifi,
-                              color: device.isOnline
-                                  ? Colors.green
-                                  : Colors.grey,
-                            ),
-                          );
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-            ],
 
             // Pending File Transfer Requests
             if (_pendingRequests.isNotEmpty) ...[
@@ -352,7 +328,7 @@ class _ReceiveTabState extends State<ReceiveTab> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
-                          'Last downloaded to: $_lastDownloadedPath',
+                          'Last downloaded: $_lastDownloadedPath',
                           style: Theme.of(context).textTheme.bodyMedium,
                         ),
                       ),
@@ -364,20 +340,20 @@ class _ReceiveTabState extends State<ReceiveTab> {
             ],
 
             // Auto-receive toggle
-            Card(
-              child: SwitchListTile(
-                title: const Text('Auto-receive files'),
-                subtitle: const Text(
-                  'Automatically accept files from trusted devices',
-                ),
-                value: _isReceiving,
-                onChanged: (value) {
-                  setState(() {
-                    _isReceiving = value;
-                  });
-                },
-              ),
-            ),
+            // Card(
+            //   child: SwitchListTile(
+            //     title: const Text('Auto-receive files'),
+            //     subtitle: const Text(
+            //       'Automatically accept files from trusted devices',
+            //     ),
+            //     value: _isReceiving,
+            //     onChanged: (value) {
+            //       setState(() {
+            //         _isReceiving = value;
+            //       });
+            //     },
+            //   ),
+            // ),
           ],
         ),
       ),

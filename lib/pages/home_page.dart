@@ -1,9 +1,11 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:cpshare/pages/tabs/receive_tab.dart';
-import 'package:cpshare/pages/tabs/send_tab.dart';
-import 'package:cpshare/pages/tabs/settings_tab.dart';
-import 'package:cpshare/services/permission_service.dart';
-import 'package:cpshare/services/device_discovery_service.dart';
+import 'package:aedove/pages/tabs/receive_tab.dart';
+import 'package:aedove/pages/tabs/send_tab.dart';
+import 'package:aedove/pages/tabs/settings_tab.dart';
+import 'package:aedove/services/permission_service.dart';
+import 'package:aedove/services/device_discovery_service.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 enum HomeTab {
   receive(Icons.wifi),
@@ -33,8 +35,14 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
-  HomeTab _currentTab = HomeTab.receive;
+class _HomePageState extends State<HomePage>
+    with SingleTickerProviderStateMixin {
+  HomeTab _currentTab = HomeTab.send;
+  late final AnimationController _refreshController = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 2),
+  );
+  bool _refreshing = false;
 
   @override
   void initState() {
@@ -44,39 +52,74 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _requestPermissions() async {
-    // Request storage permission
-    final hasStorage = await PermissionService.requestStoragePermission();
-    if (!hasStorage) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Storage permission is required for receiving files'),
-            backgroundColor: Colors.orange,
-          ),
-        );
+    if (Platform.isAndroid) {
+      // Check if permission is already granted or limited (limited access is acceptable)
+      final storageStatus = await Permission.storage.status;
+
+      // Only request if not already granted or limited
+      if (!storageStatus.isGranted && !storageStatus.isLimited) {
+        final hasStorage = await PermissionService.requestStoragePermission();
+
+        // Only show snackbar if permission was requested and denied (not limited)
+        if (!hasStorage && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Storage permission is required for receiving files on Android',
+              ),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
       }
     }
 
-    // Request location permission
-    final hasLocation = await PermissionService.requestLocationPermission();
-    if (!hasLocation) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Location permission is required for device discovery'),
-            backgroundColor: Colors.orange,
-          ),
-        );
+    // Request location permission on mobile platforms
+    if (Platform.isAndroid || Platform.isIOS) {
+      // 1. Check current status
+      final status = await Permission.locationWhenInUse.status;
+      bool hasLocation = status.isGranted || status.isLimited;
+
+      // On iOS, if permission is permanently denied, don't show warning
+      // because iOS can use Bonjour/mDNS without location permission
+      if (Platform.isIOS && status.isPermanentlyDenied) {
+        hasLocation = true; // Treat as OK for iOS
       }
+
+      // 2. If not granted or limited, request permission
+      if (!hasLocation) {
+        final result = await Permission.locationWhenInUse.request();
+        hasLocation = result.isGranted || result.isLimited;
+
+        // On iOS, permanently denied is OK (Bonjour/mDNS doesn't need it)
+        if (Platform.isIOS && result.isPermanentlyDenied) {
+          hasLocation = true;
+        }
+
+        // 3. Show warning only if permission was requested and still not granted/limited
+        // For iOS, don't show warning if permanently denied (it's OK)
+        if (!hasLocation && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Location permission may be needed for optimal device discovery',
+              ),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      }
+      // If permission was already granted or limited, don't show any snackbar
     }
   }
 
   Future<void> _startDeviceDiscovery() async {
     try {
+      // Wait for permissions before starting discovery
+      await _requestPermissions();
+
+      // Start device discovery service
       await DeviceDiscoveryService.start();
-      // Start broadcasting presence immediately and discover devices
-      await DeviceDiscoveryService.broadcastPresence();
-      await DeviceDiscoveryService.discoverDevices();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -89,48 +132,42 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  Future<void> _refreshDiscovery() async {
+    if (_refreshing) return;
+    setState(() => _refreshing = true);
+    _refreshController.repeat();
+    try {
+      await DeviceDiscoveryService.stop();
+      await DeviceDiscoveryService.start();
+    } catch (_) {}
+    if (mounted) {
+      _refreshController.stop();
+      _refreshController.reset();
+      setState(() => _refreshing = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('CP Share'),
+        title: const Text('AeDove'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         centerTitle: true,
         actions: [
-          // Show number of discovered devices
-          StreamBuilder<List<DeviceInfo>>(
-            stream: DeviceDiscoveryService.devicesStream,
-            builder: (context, snapshot) {
-              final deviceCount = snapshot.data?.length ?? 0;
-              if (deviceCount > 0) {
-                return Container(
-                  margin: const EdgeInsets.only(right: 16),
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.green,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    '$deviceCount',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                );
-              }
-              return const SizedBox.shrink();
-            },
+          IconButton(
+            tooltip: 'Refresh Device Discovery',
+            onPressed: _refreshDiscovery,
+            icon: RotationTransition(
+              turns: _refreshController,
+              child: const Icon(Icons.refresh),
+            ),
           ),
         ],
       ),
       body: IndexedStack(
         index: _currentTab.index,
-        children: const [
-          ReceiveTab(),
-          SendTab(),
-          SettingsTab(),
-        ],
+        children: const [ReceiveTab(), SendTab(), SettingsTab()],
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentTab.index,
@@ -140,12 +177,15 @@ class _HomePageState extends State<HomePage> {
           });
         },
         destinations: HomeTab.values.map((tab) {
-          return NavigationDestination(
-            icon: Icon(tab.icon),
-            label: tab.label,
-          );
+          return NavigationDestination(icon: Icon(tab.icon), label: tab.label);
         }).toList(),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _refreshController.dispose();
+    super.dispose();
   }
 }

@@ -3,9 +3,10 @@ import 'package:file_picker/file_picker.dart';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:cpshare/services/device_discovery_service.dart';
-import 'package:cpshare/services/file_transfer_service.dart';
+import 'package:aedove/services/device_discovery_service.dart';
+import 'package:aedove/services/file_transfer_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:path/path.dart' as p;
 
 class SendTab extends StatefulWidget {
   const SendTab({super.key});
@@ -204,7 +205,8 @@ class _SendTabState extends State<SendTab> {
           targetDeviceId: device.id,
           targetDeviceIP: device.ip,
           filePath: file.path,
-          fileName: file.path.split('/').last,
+          fileName: p.basename(file.path),
+          targetDevicePort: device.port,
         );
       }
 
@@ -233,59 +235,103 @@ class _SendTabState extends State<SendTab> {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.all(16.0),
+      padding: const EdgeInsets.symmetric(vertical: 0, horizontal: 24.0),
       child: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Icon(
-              Icons.send,
-              size: 80,
-              color: Theme.of(context).colorScheme.primary,
+            const SizedBox(height: 8),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Selection',
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
+                const SizedBox(height: 8),
+              ],
             ),
-            const SizedBox(height: 24),
-            Text(
-              'Send Files',
-              style: Theme.of(context).textTheme.headlineMedium,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 32),
 
             // File Selection
             if (Platform.isAndroid || Platform.isIOS) ...[
               Row(
                 children: [
-                  Expanded(
-                    child: ElevatedButton.icon(
+                  // File selection buttons
+                  SizedBox(
+                    width: 84,
+                    height: 72,
+                    child: ElevatedButton(
                       onPressed: _pickFiles,
-                      icon: const Icon(Icons.folder_open),
-                      label: const Text('Select Files'),
                       style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        padding: EdgeInsets.zero,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.folder_open, size: 32),
+                          const SizedBox(height: 4),
+                          Text('Files'),
+                        ],
                       ),
                     ),
                   ),
                   const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton.icon(
+
+                  // Media selection button
+                  SizedBox(
+                    width: 84,
+                    height: 72,
+                    child: ElevatedButton(
                       onPressed: _pickMedia,
-                      icon: const Icon(Icons.photo_library),
-                      label: const Text('Select Media'),
                       style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        padding: EdgeInsets.zero,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.photo_library, size: 32),
+                          const SizedBox(height: 4),
+                          Text('Media'),
+                        ],
                       ),
                     ),
                   ),
                 ],
               ),
             ] else ...[
-              ElevatedButton.icon(
-                onPressed: _pickFiles,
-                icon: const Icon(Icons.folder_open),
-                label: const Text('Select Files'),
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                ),
+              Row(
+                children: [
+                  SizedBox(
+                    width: 84,
+                    height: 72,
+                    child: ElevatedButton(
+                      onPressed: _pickFiles,
+                      style: ElevatedButton.styleFrom(
+                        padding: EdgeInsets.zero,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.folder_open, size: 32),
+                          const SizedBox(height: 4),
+                          Text('Files'),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
 
@@ -323,7 +369,7 @@ class _SendTabState extends State<SendTab> {
                             return ListTile(
                               leading: const Icon(Icons.insert_drive_file),
                               title: Text(
-                                file.path.split('/').last,
+                                p.basename(file.path),
                                 overflow: TextOverflow.ellipsis,
                               ),
                               subtitle: Text(
@@ -342,65 +388,58 @@ class _SendTabState extends State<SendTab> {
 
             // Discovered Devices
             if (_discoveredDevices.isNotEmpty) ...[
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Available Devices (${_discoveredDevices.length})',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 8),
-                      SizedBox(
-                        height: 200,
-                        child: ListView.builder(
-                          itemCount: _discoveredDevices.length,
-                          itemBuilder: (context, index) {
-                            final device = _discoveredDevices[index];
-                            return Card(
-                              child: ListTile(
-                                leading: const Icon(Icons.device_hub),
-                                title: Text(device.name),
-                                subtitle: Text('${device.ip}:${device.port}'),
-                                trailing: _selectedFiles.isNotEmpty
-                                    ? ElevatedButton.icon(
-                                        onPressed:
-                                            (_sendingByDeviceId[device.id] ??
-                                                false)
-                                            ? null
-                                            : () => _sendFilesToDevice(device),
-                                        icon:
-                                            (_sendingByDeviceId[device.id] ??
-                                                false)
-                                            ? const SizedBox(
-                                                width: 16,
-                                                height: 16,
-                                                child:
-                                                    CircularProgressIndicator(
-                                                      strokeWidth: 2,
-                                                    ),
-                                              )
-                                            : const Icon(Icons.send),
-                                        label: Text(
+              Padding(
+                padding: const EdgeInsets.all(0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Available Devices (${_discoveredDevices.length})',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      height: 400,
+                      child: ListView.builder(
+                        itemCount: _discoveredDevices.length,
+                        itemBuilder: (context, index) {
+                          final device = _discoveredDevices[index];
+                          return Card(
+                            child: ListTile(
+                              leading: const Icon(Icons.devices),
+                              title: Text(device.name),
+                              subtitle: Text('${device.ip}:${device.port}'),
+                              trailing: _selectedFiles.isNotEmpty
+                                  ? ElevatedButton.icon(
+                                      onPressed:
                                           (_sendingByDeviceId[device.id] ??
-                                                  false)
-                                              ? 'Sending...'
-                                              : 'Send',
-                                        ),
-                                      )
-                                    : const Icon(
-                                        Icons.wifi,
-                                        color: Colors.green,
+                                              false)
+                                          ? null
+                                          : () => _sendFilesToDevice(device),
+                                      icon:
+                                          (_sendingByDeviceId[device.id] ??
+                                              false)
+                                          ? const SizedBox(
+                                              width: 16,
+                                              height: 16,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                              ),
+                                            )
+                                          : const Icon(Icons.send),
+                                      label: Text(
+                                        (_sendingByDeviceId[device.id] ?? false)
+                                            ? 'Sending...'
+                                            : 'Send',
                                       ),
-                              ),
-                            );
-                          },
-                        ),
+                                    )
+                                  : const Icon(Icons.wifi, color: Colors.green),
+                            ),
+                          );
+                        },
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ] else ...[
@@ -419,35 +458,6 @@ class _SendTabState extends State<SendTab> {
                       const SizedBox(height: 8),
                       Text(
                         'Make sure other devices are connected to the same WiFi network and have CPS Share running',
-                        style: Theme.of(context).textTheme.bodyMedium,
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-
-            // No files selected
-            if (_selectedFiles.isEmpty) ...[
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(32.0),
-                  child: Column(
-                    children: [
-                      Icon(
-                        Icons.cloud_upload,
-                        size: 64,
-                        color: Colors.grey[400],
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'No files selected',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Tap "Select Files" or "Select Media" to choose items to send',
                         style: Theme.of(context).textTheme.bodyMedium,
                         textAlign: TextAlign.center,
                       ),

@@ -15,8 +15,10 @@ class _SettingsTabState extends State<SettingsTab> {
   String _deviceName = 'My Device';
   String _deviceId = 'Unknown';
   String _ipAddress = 'Unknown';
+  // ignore: unused_field
   bool _autoAcceptFiles = false;
   bool _notificationsEnabled = true;
+  // ignore: unused_field
   bool _backgroundServiceEnabled = true;
 
   @override
@@ -33,7 +35,8 @@ class _SettingsTabState extends State<SettingsTab> {
       _deviceId = prefs.getString('device_id') ?? 'Unknown';
       _autoAcceptFiles = prefs.getBool('auto_accept_files') ?? false;
       _notificationsEnabled = prefs.getBool('notifications_enabled') ?? true;
-      _backgroundServiceEnabled = prefs.getBool('background_service_enabled') ?? true;
+      _backgroundServiceEnabled =
+          prefs.getBool('background_service_enabled') ?? true;
     });
   }
 
@@ -46,7 +49,7 @@ class _SettingsTabState extends State<SettingsTab> {
             includeLinkLocal: false,
             type: InternetAddressType.IPv4,
           );
-          
+
           // Find the first non-loopback IPv4 address
           for (var interface in interfaces) {
             for (var addr in interface.addresses) {
@@ -63,8 +66,9 @@ class _SettingsTabState extends State<SettingsTab> {
       } else {
         final networkInfo = NetworkInfo();
         final connectivityResult = await Connectivity().checkConnectivity();
-        
-        if (connectivityResult.isNotEmpty && connectivityResult.first != ConnectivityResult.none) {
+
+        if (connectivityResult.isNotEmpty &&
+            connectivityResult.first != ConnectivityResult.none) {
           ipAddress = await networkInfo.getWifiIP() ?? 'Unknown';
         }
       }
@@ -98,10 +102,11 @@ class _SettingsTabState extends State<SettingsTab> {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.all(16.0),
+      padding: const EdgeInsets.symmetric(vertical: 0, horizontal: 24.0),
       child: SingleChildScrollView(
         child: Column(
           children: [
+            const SizedBox(height: 8),
             Icon(
               Icons.settings,
               size: 80,
@@ -114,7 +119,7 @@ class _SettingsTabState extends State<SettingsTab> {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 32),
-            
+
             // Device Information
             Card(
               child: Padding(
@@ -128,7 +133,7 @@ class _SettingsTabState extends State<SettingsTab> {
                     ),
                     const SizedBox(height: 16),
                     ListTile(
-                      leading: const Icon(Icons.device_hub),
+                      leading: const Icon(Icons.devices),
                       title: const Text('Device Name'),
                       subtitle: Text(_deviceName),
                       trailing: const Icon(Icons.edit),
@@ -148,9 +153,9 @@ class _SettingsTabState extends State<SettingsTab> {
                 ),
               ),
             ),
-            
+
             const SizedBox(height: 16),
-            
+
             // File Transfer Settings
             Card(
               child: Padding(
@@ -163,37 +168,43 @@ class _SettingsTabState extends State<SettingsTab> {
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 16),
-                    SwitchListTile(
-                      title: const Text('Auto-accept files'),
-                      subtitle: const Text('Automatically accept files from trusted devices'),
-                      value: _autoAcceptFiles,
-                      onChanged: (value) {
-                        _saveSetting('auto_accept_files', value);
-                      },
-                    ),
+                    // SwitchListTile(
+                    //   title: const Text('Auto-accept files'),
+                    //   subtitle: const Text(
+                    //     'Automatically accept files from trusted devices',
+                    //   ),
+                    //   value: _autoAcceptFiles,
+                    //   onChanged: (value) {
+                    //     _saveSetting('auto_accept_files', value);
+                    //   },
+                    // ),
                     SwitchListTile(
                       title: const Text('Notifications'),
-                      subtitle: const Text('Show notifications for file transfers'),
+                      subtitle: const Text(
+                        'Show notifications for file transfers',
+                      ),
                       value: _notificationsEnabled,
                       onChanged: (value) {
                         _saveSetting('notifications_enabled', value);
                       },
                     ),
-                    SwitchListTile(
-                      title: const Text('Background Service'),
-                      subtitle: const Text('Keep service running in background'),
-                      value: _backgroundServiceEnabled,
-                      onChanged: (value) {
-                        _saveSetting('background_service_enabled', value);
-                      },
-                    ),
+                    // SwitchListTile(
+                    //   title: const Text('Background Service'),
+                    //   subtitle: const Text(
+                    //     'Keep service running in background',
+                    //   ),
+                    //   value: _backgroundServiceEnabled,
+                    //   onChanged: (value) {
+                    //     _saveSetting('background_service_enabled', value);
+                    //   },
+                    // ),
                   ],
                 ),
               ),
             ),
-            
+
             const SizedBox(height: 16),
-            
+
             // App Information
             Card(
               child: Padding(
@@ -228,7 +239,7 @@ class _SettingsTabState extends State<SettingsTab> {
 
   void _showDeviceNameDialog() {
     final controller = TextEditingController(text: _deviceName);
-    
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(

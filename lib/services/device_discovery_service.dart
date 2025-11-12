@@ -1,27 +1,13 @@
 import 'dart:io';
 import 'dart:convert';
 import 'dart:async';
-import 'dart:developer' as dev;
+import 'package:bonsoir/bonsoir.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:uuid/uuid.dart';
 import 'package:network_info_plus/network_info_plus.dart';
-
-extension IterableExtension<T> on Iterable<T> {
-  Iterable<List<T>> chunked(int size) sync* {
-    if (isEmpty) return;
-    var iterator = this.iterator;
-    var chunk = <T>[];
-    while (iterator.moveNext()) {
-      chunk.add(iterator.current);
-      if (chunk.length == size) {
-        yield chunk;
-        chunk = <T>[];
-      }
-    }
-    if (chunk.isNotEmpty) yield chunk;
-  }
-}
+import 'package:multicast_dns/multicast_dns.dart';
+import 'package:aedove/services/file_transfer_service.dart';
 
 class DeviceInfo {
   final String id;
@@ -60,16 +46,31 @@ class DeviceInfo {
 }
 
 class DeviceDiscoveryService {
-  static const List<int> _discoveryPorts = [8080, 8081, 8082, 8083, 8084, 8085];
+  static const String _serviceType = '_aedove._tcp';
+  static String? _currentDeviceId;
+  static String? _currentDeviceIp; // cache own IP to avoid processing self
+  static const int _mdnsPort = 53317; // Port for mDNS service
+  static const int _udpPort = 53318; // Separate port for UDP broadcast
   static const int _broadcastInterval = 30; // seconds
-  static const int _discoveryTimeout = 5; // seconds
+  static const Duration _cleanupThreshold = Duration(minutes: 5);
+  static const Duration _reconnectDelay = Duration(seconds: 5);
+  static bool _verbose = false; // set to true to enable detailed logs
 
-  static HttpServer? _server;
+  static BonsoirBroadcast? _broadcast;
+  static BonsoirDiscovery? _discovery;
+  static RawDatagramSocket? _udpSocket;
   static Timer? _broadcastTimer;
   static Timer? _cleanupTimer;
+  static Timer? _reconnectTimer;
+  static Timer? _networkCheckTimer;
+  static Timer? _mdnsRefreshTimer;
+
+  static bool _isStarted = false;
+  static bool _isInitializing = false;
   static final Map<String, DeviceInfo> _discoveredDevices = {};
   static final StreamController<List<DeviceInfo>> _devicesController =
       StreamController<List<DeviceInfo>>.broadcast();
+  static const Duration _timeoutDuration = Duration(seconds: 30);
 
   static Stream<List<DeviceInfo>> get devicesStream =>
       _devicesController.stream;
@@ -77,347 +78,801 @@ class DeviceDiscoveryService {
       _discoveredDevices.values.toList();
 
   static Future<void> start() async {
-    await _startDiscoveryServer();
-    await _startBroadcasting();
+    if (_isStarted) {
+      print('Device discovery service is already running');
+      return;
+    }
+
+    if (_isInitializing) {
+      print('Device discovery service is already initializing');
+      return;
+    }
+
+    try {
+      _isInitializing = true;
+      print('Starting device discovery service...');
+
+      // Get and store current device ID/IP first
+      final deviceInfo = await _getDeviceInfo();
+      _currentDeviceId = deviceInfo.id;
+      _currentDeviceIp = deviceInfo.ip; // cache own ip
+
+      await _initializeServices().timeout(
+        _timeoutDuration,
+        onTimeout: () {
+          throw TimeoutException('Service initialization timed out');
+        },
+      );
+
+      _isStarted = true;
+      print('Device discovery service started successfully');
+    } catch (e, stackTrace) {
+      print('Failed to start device discovery service: $e');
+      print('Stack trace: $stackTrace');
+      await stop();
+      rethrow;
+    } finally {
+      _isInitializing = false;
+    }
+  }
+
+  static Future<void> _initializeServices() async {
+    await _startMdnsService();
+    // Start UDP socket on all platforms to listen; only non-iOS will broadcast
+    await _startUdpBroadcast();
     await _startCleanupTimer();
+    _startNetworkMonitoring();
+    _startAndroidMdnsFallback();
+    _startWindowsMdnsFallback();
   }
 
   static Future<void> stop() async {
-    _server?.close();
-    _broadcastTimer?.cancel();
-    _cleanupTimer?.cancel();
-    _devicesController.close();
+    print('Stopping device discovery service...');
+    _isStarted = false;
+
+    try {
+      // Stop broadcast service with timeout
+      if (_broadcast != null) {
+        try {
+          await _broadcast!.stop().timeout(
+            const Duration(seconds: 5),
+            onTimeout: () => print('Broadcast stop timed out'),
+          );
+        } catch (e) {
+          print('Error stopping broadcast service: $e');
+        } finally {
+          _broadcast = null;
+        }
+      }
+
+      // Stop discovery service with timeout
+      if (_discovery != null) {
+        try {
+          await _discovery!.stop().timeout(
+            const Duration(seconds: 5),
+            onTimeout: () => print('Discovery stop timed out'),
+          );
+        } catch (e) {
+          print('Error stopping discovery service: $e');
+        } finally {
+          _discovery = null;
+        }
+      }
+
+      // Clean up UDP resources
+      if (_udpSocket != null) {
+        try {
+          _udpSocket!.close();
+        } catch (e) {
+          print('Error closing UDP socket: $e');
+        } finally {
+          _udpSocket = null;
+        }
+      }
+
+      // Cancel timers
+      _broadcastTimer?.cancel();
+      _cleanupTimer?.cancel();
+      _broadcastTimer = null;
+      _cleanupTimer = null;
+
+      // Clear discovered devices
+      _discoveredDevices.clear();
+
+      // Cancel all timers
+      _networkCheckTimer?.cancel();
+      _reconnectTimer?.cancel();
+      _mdnsRefreshTimer?.cancel();
+
+      print('Device discovery service stopped successfully');
+    } catch (e) {
+      print('Error stopping device discovery service: $e');
+    } finally {
+      // Ensure all resources are cleared even if there were errors
+      _broadcast = null;
+      _discovery = null;
+      _udpSocket = null;
+      _broadcastTimer = null;
+      _cleanupTimer = null;
+      _networkCheckTimer = null;
+      _reconnectTimer = null;
+      _mdnsRefreshTimer = null;
+      _isInitializing = false;
+    }
   }
 
-  static int _currentPort = _discoveryPorts[0];
-  static int get discoveryPort => _currentPort;
+  static Future<void> _startMdnsService() async {
+    print('Initializing mDNS service...');
+    try {
+      final deviceInfo = await _getDeviceInfo();
+      if (deviceInfo.ip == 'unknown') {
+        throw Exception('Could not determine device IP address');
+      }
 
-  static Future<void> _startDiscoveryServer() async {
-    for (final port in _discoveryPorts) {
+      print('Device info: ${deviceInfo.toJson()}');
+
+      // Create the service with a unique name and file transfer port
+      final service = BonsoirService(
+        name: '${deviceInfo.name}_${deviceInfo.id.substring(0, 8)}',
+        type: _serviceType,
+        port:
+            FileTransferService.getServerPort(), // Advertise actual file transfer port
+        attributes: {
+          // Use short TXT keys (Android NSD discourages > 9 chars)
+          'id': deviceInfo.id,
+          'ip': deviceInfo.ip,
+          'tport': FileTransferService.getServerPort().toString(),
+          'uport': _udpPort.toString(),
+        },
+      );
+
+      // Initialize broadcast with error handling
       try {
-        // Try to bind to specific interfaces first
-        final interfaces = await NetworkInterface.list(
-          type: InternetAddressType.IPv4,
-          includeLinkLocal: false,
+        _broadcast = BonsoirBroadcast(service: service);
+        await _broadcast?.initialize().timeout(
+          const Duration(seconds: 5),
+          onTimeout: () =>
+              throw TimeoutException('Broadcast initialization timed out'),
         );
+        print('Broadcast service initialized');
+      } catch (e) {
+        print('Error initializing broadcast service: $e');
+        _broadcast = null;
+      }
 
-        for (final interface in interfaces) {
-          for (final addr in interface.addresses) {
-            if (!addr.isLoopback) {
-              try {
-                print('Trying to bind to ${addr.address}:$port');
-                _server = await HttpServer.bind(
-                  addr,
-                  port,
-                  shared: true,
-                  v6Only: false,
-                );
-                _currentPort = port;
-                _server!.listen((HttpRequest request) {
-                  _handleDiscoveryRequest(request);
-                });
-                print('Successfully bound to ${addr.address}:$_currentPort');
-                return;
-              } catch (e) {
-                print('Failed to bind to ${addr.address}:$port: $e');
-                continue;
-              }
-            }
+      // Initialize discovery with error handling
+      try {
+        _discovery = BonsoirDiscovery(type: _serviceType);
+        await _discovery?.initialize().timeout(
+          const Duration(seconds: 5),
+          onTimeout: () =>
+              throw TimeoutException('Discovery initialization timed out'),
+        );
+        print('Discovery service initialized');
+      } catch (e) {
+        print('Error initializing discovery service: $e');
+        _discovery = null;
+      }
+
+      // Verify at least one service initialized
+      if (_broadcast == null && _discovery == null) {
+        throw Exception(
+          'Failed to initialize both broadcast and discovery services',
+        );
+      }
+
+      // Set up discovery listener with resolution when needed
+      _discovery?.eventStream?.listen((event) async {
+        if (_verbose) {
+          print(
+            'Received mDNS event: ${event.runtimeType} - ${event.toString()}',
+          );
+        }
+        if (event.service != null) {
+          if (_verbose) {
+            print('Service details: ${event.service?.toJson()}');
+          }
+          if (event.toString().contains('Found') ||
+              event.toString().contains('Resolved') ||
+              event.toString().contains('Updated')) {
+            final service = event.service!;
+            // We include IP/ports in attributes, so resolution is optional. Handle as-is.
+            await _handleDiscoveredService(service);
+          } else if (event.toString().contains('Lost')) {
+            _handleLostService(event.service);
           }
         }
+      }, onError: (e) => _verbose ? print('mDNS event error: $e') : null);
 
-        // If binding to specific interfaces fails, try binding to any
-        print('Trying to bind to any address on port $port');
-        _server = await HttpServer.bind(
-          InternetAddress.anyIPv4,
-          port,
-          shared: true,
+      // Removed frequent mDNS restart to reduce noise and instability.
+
+      // Start broadcast if available
+      if (_broadcast != null) {
+        try {
+          await _broadcast!.start().timeout(
+            const Duration(seconds: 5),
+            onTimeout: () =>
+                throw TimeoutException('Broadcast start timed out'),
+          );
+          if (_verbose) print('Broadcast service started');
+        } catch (e) {
+          print('Error starting broadcast service: $e');
+          _broadcast = null;
+        }
+      }
+
+      // Start discovery if available
+      if (_discovery != null) {
+        try {
+          await _discovery!.start().timeout(
+            const Duration(seconds: 5),
+            onTimeout: () =>
+                throw TimeoutException('Discovery start timed out'),
+          );
+          if (_verbose) print('Discovery service started');
+        } catch (e) {
+          print('Error starting discovery service: $e');
+          _discovery = null;
+        }
+      }
+
+      // Final check to ensure at least one service is running
+      if (_broadcast == null && _discovery == null) {
+        throw Exception(
+          'Failed to start both broadcast and discovery services',
         );
-        _currentPort = port;
-        _server!.listen((HttpRequest request) {
-          _handleDiscoveryRequest(request);
-        });
-        print('Successfully bound to any address on port $_currentPort');
-        return;
-      } catch (e) {
-        print('Failed to bind to port $port: $e');
-        continue;
       }
-    }
-    throw Exception('Failed to bind to any available port');
-  }
-
-  static Future<void> _handleDiscoveryRequest(HttpRequest request) async {
-    try {
-      if (request.method == 'GET' && request.uri.path == '/discover') {
-        // Return device info
-        final deviceInfo = await _getDeviceInfo();
-        request.response
-          ..headers.contentType = ContentType.json
-          ..write(jsonEncode(deviceInfo.toJson()))
-          ..close();
-      } else if (request.method == 'POST' && request.uri.path == '/register') {
-        // Register a new device
-        final body = await utf8.decodeStream(request);
-        final deviceData = jsonDecode(body);
-        final deviceInfo = DeviceInfo.fromJson(deviceData);
-
-        _discoveredDevices[deviceInfo.id] = deviceInfo;
-        _devicesController.add(_discoveredDevices.values.toList());
-
-        request.response
-          ..statusCode = 200
-          ..write('OK')
-          ..close();
-      }
+      if (_verbose) print('mDNS service started successfully');
     } catch (e) {
-      print('Error handling discovery request: $e');
-      request.response
-        ..statusCode = 500
-        ..write('Error')
-        ..close();
+      print('Error starting mDNS service: $e');
+      rethrow;
     }
   }
 
-  static Future<void> _startBroadcasting() async {
-    // Initial broadcast
-    await broadcastPresence();
+  // Android NSD can provide empty/incorrect TXT/port. Use multicast_dns as a fallback
+  static void _startAndroidMdnsFallback() {
+    _mdnsRefreshTimer?.cancel();
+    if (!Platform.isAndroid) return;
+    _mdnsRefreshTimer = Timer.periodic(const Duration(seconds: 8), (_) async {
+      if (!_isStarted) return;
+      try {
+        final client = MDnsClient();
+        await client.start();
 
-    // Start periodic broadcasting
-    _broadcastTimer = Timer.periodic(
-      const Duration(seconds: _broadcastInterval),
-      (timer) async {
-        await broadcastPresence();
-      },
-    );
+        // Query for our service type
+        await for (final ptr in client.lookup<PtrResourceRecord>(
+          ResourceRecordQuery.serverPointer(_serviceType),
+        )) {
+          final instance = ptr.domainName; // e.g., "Name._aedove._tcp.local"
 
-    // Initial device discovery
-    await discoverDevices();
-  }
+          // Resolve SRV for port/target
+          SrvResourceRecord? srv;
+          await for (final s in client.lookup<SrvResourceRecord>(
+            ResourceRecordQuery.service(instance),
+          )) {
+            srv = s;
+            break;
+          }
 
-  static Future<void> _startCleanupTimer() async {
-    _cleanupTimer = Timer.periodic(const Duration(minutes: 1), (timer) async {
-      _cleanupOfflineDevices();
+          // Resolve TXT for attributes
+          Map<String, String> txtMap = {};
+          await for (final txt in client.lookup<TxtResourceRecord>(
+            ResourceRecordQuery.text(instance),
+          )) {
+            final dynamic raw = txt.text;
+            final List<String> entries = raw is List<String>
+                ? raw
+                : raw is String
+                ? <String>[raw]
+                : <String>[];
+            for (final entry in entries) {
+              final idx = entry.indexOf('=');
+              if (idx > 0) {
+                final k = entry.substring(0, idx);
+                final v = entry.substring(idx + 1);
+                txtMap[k] = v;
+              }
+            }
+            break;
+          }
+
+          // Resolve A record for IPv4
+          String? ip;
+          if (srv != null) {
+            await for (final a in client.lookup<IPAddressResourceRecord>(
+              ResourceRecordQuery.addressIPv4(srv.target),
+            )) {
+              ip = a.address.address;
+              break;
+            }
+          }
+
+          final id = txtMap['id'] ?? '';
+          if (id.isEmpty || id == _currentDeviceId) continue;
+
+          final tport = int.tryParse(txtMap['tport'] ?? '') ?? (srv?.port ?? 0);
+          final resolvedIp = txtMap['ip'] ?? ip;
+          if (resolvedIp == null || resolvedIp.isEmpty || tport <= 0) continue;
+
+          final device = DeviceInfo(
+            id: id,
+            name: instance.split('._').first,
+            ip: resolvedIp,
+            port: tport,
+            lastSeen: DateTime.now(),
+          );
+          _updateDiscoveredDevice(device);
+        }
+        client.stop();
+      } catch (e) {
+        if (_verbose) print('multicast_dns fallback error: $e');
+      }
     });
   }
 
-  static Future<void> broadcastPresence([String? ip]) async {
-    try {
-      final deviceInfo = await _getDeviceInfo();
-      String? currentIP;
-      
-      if (Platform.isWindows) {
-        try {
-          final interfaces = await NetworkInterface.list(
-            includeLinkLocal: false,
-            type: InternetAddressType.IPv4,
-          );
-          
-          for (var interface in interfaces) {
-            for (var addr in interface.addresses) {
-              if (!addr.isLoopback && addr.type == InternetAddressType.IPv4) {
-                currentIP = addr.address;
-                break;
-              }
-            }
-            if (currentIP != null) break;
-          }
-        } catch (e) {
-          print('Error getting Windows IP for broadcast: $e');
-        }
-      } else {
-        final networkInfo = NetworkInfo();
-        currentIP = ip ?? await networkInfo.getWifiIP();
-      }
-
-      if (currentIP == null) {
-        print('Could not determine current IP for broadcasting');
-        return;
-      }
-      
-      print('Broadcasting presence from IP: $currentIP');
-
-      // Broadcast to all devices in the network
-      final networkBase = _getNetworkBase(currentIP);
-
-      for (int i = 1; i <= 254; i++) {
-        final targetIP = '$networkBase.$i';
-        if (targetIP == currentIP) continue;
-
-        _sendBroadcast(targetIP, deviceInfo);
-      }
-    } catch (e) {
-      print('Broadcast error: $e');
-    }
-  }
-
-  static Future<void> discoverDevices([String? ip]) async {
-    try {
-      List<String> networkBases = [];
-      
-      if (Platform.isWindows) {
-        try {
-          final interfaces = await NetworkInterface.list(
-            includeLinkLocal: false,
-            type: InternetAddressType.IPv4,
-          );
-          
-          // Collect all network bases from all interfaces
-          for (var interface in interfaces) {
-            for (var addr in interface.addresses) {
-              if (!addr.isLoopback && addr.type == InternetAddressType.IPv4) {
-                final base = _getNetworkBase(addr.address);
-                if (!networkBases.contains(base)) {
-                  networkBases.add(base);
-                }
-              }
-            }
-          }
-        } catch (e) {
-          print('Error getting Windows IP: $e');
-        }
-      } else {
-        final networkInfo = NetworkInfo();
-        final currentIP = ip ?? await networkInfo.getWifiIP();
-        if (currentIP != null) {
-          networkBases.add(_getNetworkBase(currentIP));
-        }
-      }
-
-      if (networkBases.isEmpty) {
-        print('Could not determine any network addresses');
-        return;
-      }
-
-      // Create a list of all discovery tasks for all networks
-      List<Future<void>> discoveryTasks = [];
-      
-      for (final networkBase in networkBases) {
-        print('Starting device discovery on network: $networkBase.*');
-        
-        for (int i = 1; i <= 254; i++) {
-          final targetIP = '$networkBase.$i';
-          
-          // Try each port for each IP
-          for (final port in _discoveryPorts) {
-            discoveryTasks.add(_discoverDevice(targetIP, port).timeout(
-              const Duration(seconds: 1),
-              onTimeout: () => print('Discovery timeout for $targetIP:$port'),
-            ));
-          }
-        }
-      }
-
-      // Run discovery tasks in parallel with a maximum of 50 concurrent tasks
-      final chunks = discoveryTasks.chunked(50);
-      for (final chunk in chunks) {
-        await Future.wait(chunk).catchError((e) {
-          print('Error in discovery chunk: $e');
-        });
-      }
-      
-      print('Device discovery completed on all networks');
-    } catch (e) {
-      print('Device discovery error: $e');
-    }
-  }
-
-  static Future<void> _sendBroadcast(String ip, DeviceInfo deviceInfo) async {
-    final client = HttpClient();
-    try {
-      client.connectionTimeout = const Duration(seconds: 1);
-
-      // First try the direct IP
+  static void _startWindowsMdnsFallback() {
+    if (!Platform.isWindows) return;
+    _mdnsRefreshTimer?.cancel();
+    _mdnsRefreshTimer = Timer.periodic(const Duration(seconds: 8), (_) async {
+      if (!_isStarted) return;
       try {
-        print('Attempting broadcast to $ip:$_currentPort');
-        final request = await client.postUrl(
-          Uri.parse('http://$ip:$_currentPort/register'),
-        );
-        request.headers.contentType = ContentType.json;
-        request.write(jsonEncode(deviceInfo.toJson()));
-
-        final response = await request.close();
-        if (response.statusCode == 200) {
-          print('Successfully registered with device at $ip:$_currentPort');
-          _discoveredDevices[deviceInfo.id] = deviceInfo;
-          _devicesController.add(_discoveredDevices.values.toList());
-          return;
-        }
-      } catch (e) {
-        // Try alternate ports if the primary port fails
-        for (final port in _discoveryPorts) {
-          if (port == _currentPort) continue;
-          try {
-            print('Trying alternate port $port for $ip');
-            final request = await client.postUrl(
-              Uri.parse('http://$ip:$port/register'),
-            );
-            request.headers.contentType = ContentType.json;
-            request.write(jsonEncode(deviceInfo.toJson()));
-
-            final response = await request.close();
-            if (response.statusCode == 200) {
-              print('Successfully registered with device at $ip:$port');
-              deviceInfo = DeviceInfo(
-                id: deviceInfo.id,
-                name: deviceInfo.name,
-                ip: deviceInfo.ip,
-                port: port,
-                lastSeen: DateTime.now(),
-              );
-              _discoveredDevices[deviceInfo.id] = deviceInfo;
-              _devicesController.add(_discoveredDevices.values.toList());
-              return;
-            }
-          } catch (e) {
-            // Continue to next port
-            continue;
+        final client = MDnsClient();
+        await client.start();
+        await for (final ptr in client.lookup<PtrResourceRecord>(
+          ResourceRecordQuery.serverPointer(_serviceType),
+        )) {
+          final instance = ptr.domainName;
+          SrvResourceRecord? srv;
+          await for (final s in client.lookup<SrvResourceRecord>(
+            ResourceRecordQuery.service(instance),
+          )) {
+            srv = s;
+            break;
           }
+          Map<String, String> txtMap = {};
+          await for (final txt in client.lookup<TxtResourceRecord>(
+            ResourceRecordQuery.text(instance),
+          )) {
+            final dynamic raw = txt.text;
+            final List<String> entries = raw is List<String>
+                ? raw
+                : raw is String
+                ? <String>[raw]
+                : <String>[];
+            for (final entry in entries) {
+              final idx = entry.indexOf('=');
+              if (idx > 0) {
+                txtMap[entry.substring(0, idx)] = entry.substring(idx + 1);
+              }
+            }
+            break;
+          }
+          String? ip;
+          if (srv != null) {
+            await for (final a in client.lookup<IPAddressResourceRecord>(
+              ResourceRecordQuery.addressIPv4(srv.target),
+            )) {
+              ip = a.address.address;
+              break;
+            }
+          }
+          final id = txtMap['id'] ?? '';
+          if (id.isEmpty || id == _currentDeviceId) continue;
+          final tport = int.tryParse(txtMap['tport'] ?? '') ?? (srv?.port ?? 0);
+          final resolvedIp = txtMap['ip'] ?? ip;
+          if (resolvedIp == null || resolvedIp.isEmpty || tport <= 0) continue;
+          final device = DeviceInfo(
+            id: id,
+            name: instance.split('._').first,
+            ip: resolvedIp,
+            port: tport,
+            lastSeen: DateTime.now(),
+          );
+          _updateDiscoveredDevice(device);
         }
+        client.stop();
+      } catch (e) {
+        if (_verbose) print('windows multicast_dns fallback error: $e');
       }
-    } catch (e) {
-      if (!e.toString().contains('Connection refused') &&
-          !e.toString().contains('Connection timed out')) {
-        print('Broadcast error to $ip: $e');
-      }
-    } finally {
-      client.close();
-    }
+    });
   }
 
-  static Future<void> _discoverDevice(String ip, [int? port]) async {
-    final client = HttpClient();
-    try {
-      client.connectionTimeout = const Duration(seconds: 1);
+  static Future<void> _startUdpBroadcast() async {
+    print('Starting UDP broadcast service...');
+    await _initializeUdpSocket();
+  }
 
-      final targetPort = port ?? _currentPort;
-      print('Attempting to discover device at $ip:$targetPort');
-      
-      final request = await client.getUrl(
-        Uri.parse('http://$ip:$targetPort/discover'),
+  static Future<void> _initializeUdpSocket() async {
+    try {
+      // Close existing socket if any
+      _udpSocket?.close();
+      _udpSocket = null;
+
+      // Create new socket
+      _udpSocket = await RawDatagramSocket.bind(
+        InternetAddress.anyIPv4,
+        _udpPort,
+      );
+      _udpSocket!.broadcastEnabled = true;
+
+      // Listen for incoming discovery messages with error handling
+      _udpSocket!.listen(
+        (RawSocketEvent event) {
+          if (event == RawSocketEvent.read) {
+            _handleUdpMessage(_udpSocket!);
+          }
+        },
+        onError: (e) {
+          print('UDP socket error: $e');
+          _scheduleReconnect();
+        },
+        onDone: () {
+          print('UDP socket closed unexpectedly');
+          _scheduleReconnect();
+        },
       );
 
-      final response = await request.close();
-      if (response.statusCode == 200) {
-        final body = await utf8.decodeStream(response);
-        final deviceData = jsonDecode(body);
-        final deviceInfo = DeviceInfo.fromJson(deviceData);
+      // Start periodic broadcast (disable on iOS: only listen/respond)
+      _broadcastTimer?.cancel();
+      if (!Platform.isIOS) {
+        _broadcastTimer = Timer.periodic(
+          Duration(seconds: _broadcastInterval),
+          (_) => _sendUdpBroadcast(),
+        );
+        // Send initial broadcast
+        await _sendUdpBroadcast();
+      }
+      if (_verbose) print('UDP broadcast service started successfully');
+    } catch (e) {
+      print('Error initializing UDP socket: $e');
+      _scheduleReconnect();
+      rethrow;
+    }
+  }
 
-        print('Found device: ${deviceInfo.name} at ${deviceInfo.ip}:${deviceInfo.port}');
-        _discoveredDevices[deviceInfo.id] = deviceInfo;
-        _devicesController.add(_discoveredDevices.values.toList());
+  static void _scheduleReconnect() {
+    _reconnectTimer?.cancel();
+    _reconnectTimer = Timer(_reconnectDelay, () async {
+      if (_isStarted && !_isInitializing) {
+        if (_verbose) print('Attempting to reconnect UDP service...');
+        try {
+          await _initializeUdpSocket();
+        } catch (e) {
+          if (_verbose) print('Reconnection attempt failed: $e');
+        }
+      }
+    });
+  }
+
+  static Future<void> _sendUdpBroadcast() async {
+    if (!_isStarted) return;
+
+    try {
+      final deviceInfo = await _getDeviceInfo();
+      if (deviceInfo.ip == 'unknown') return;
+
+      final message = jsonEncode({
+        'type': 'discovery',
+        'data': deviceInfo.toJson(),
+      });
+
+      // For Windows, use only subnet-specific broadcast
+      if (Platform.isWindows) {
+        final parts = deviceInfo.ip.split('.');
+        if (parts.length == 4) {
+          final networkBase = '${parts[0]}.${parts[1]}.${parts[2]}';
+
+          // Limit the broadcast range on Windows to prevent flooding
+          for (int i = 1; i <= 254; i += 2) {
+            final targetIp = '$networkBase.$i';
+            if (targetIp != deviceInfo.ip) {
+              try {
+                _udpSocket?.send(
+                  utf8.encode(message),
+                  InternetAddress(targetIp),
+                  _udpPort,
+                );
+                // Add small delay to prevent flooding
+                await Future.delayed(const Duration(milliseconds: 5));
+              } catch (e) {
+                // Ignore individual send errors
+              }
+            }
+          }
+        }
       } else {
-        print('Got non-200 response from $ip:$targetPort: ${response.statusCode}');
+        // Non-Windows platforms
+        final parts = deviceInfo.ip.split('.');
+        if (parts.length == 4) {
+          final networkBase = '${parts[0]}.${parts[1]}.${parts[2]}';
+          // macOS/Android/Linux: try global and directed broadcast
+          if (!Platform.isIOS) {
+            // Global broadcast (some routers drop it, but cheap win when it works)
+            try {
+              _udpSocket?.send(
+                utf8.encode(message),
+                InternetAddress('255.255.255.255'),
+                _udpPort,
+              );
+            } catch (_) {}
+            // Directed broadcast for the subnet
+            try {
+              _udpSocket?.send(
+                utf8.encode(message),
+                InternetAddress('$networkBase.255'),
+                _udpPort,
+              );
+            } catch (_) {}
+          } else {
+            // iOS: avoid 255.255.255.255. Probe subnet sparsely to reduce cost
+            for (int i = 1; i <= 254; i += 4) {
+              final targetIp = '$networkBase.$i';
+              if (targetIp != deviceInfo.ip) {
+                try {
+                  _udpSocket?.send(
+                    utf8.encode(message),
+                    InternetAddress(targetIp),
+                    _udpPort,
+                  );
+                  await Future.delayed(const Duration(milliseconds: 2));
+                } catch (_) {}
+              }
+            }
+          }
+        }
       }
     } catch (e) {
-      // Only log connection errors if they're not typical "host unreachable" errors
-      if (!e.toString().contains('Connection refused') && 
-          !e.toString().contains('Connection timed out')) {
-        print('Error discovering device at $ip: $e');
-      }
-    } finally {
-      client.close();
+      if (_verbose) print('Error sending UDP broadcast: $e');
     }
+  }
+
+  static void _handleUdpMessage(RawDatagramSocket socket) {
+    final datagram = socket.receive();
+    if (datagram == null) return;
+
+    try {
+      final message = utf8.decode(datagram.data);
+      final trimmed = message.trimLeft();
+      // Ignore non-JSON payloads silently
+      if (!trimmed.startsWith('{')) {
+        if (_verbose) {
+          print(
+            'Ignored non-JSON UDP payload from ${datagram.address.address}:${datagram.port}',
+          );
+        }
+        return;
+      }
+      final data = jsonDecode(trimmed);
+      if (data is! Map) return;
+
+      final String? type = data['type'];
+      if (type == null) return;
+
+      if (type == 'health_check') {
+        // Local health check, no action needed
+        return;
+      }
+
+      if (type == 'discovery' || type == 'discovery_response') {
+        final deviceInfo = DeviceInfo.fromJson(data['data']);
+
+        // Skip if this is our own device
+        if (deviceInfo.id == _currentDeviceId) {
+          return;
+        }
+
+        if (_verbose)
+          print('Found device via UDP ($type): ${deviceInfo.toJson()}');
+
+        // If we received a discovery (not a response), reply.
+        if (type == 'discovery') {
+          _sendUdpResponse(datagram.address, datagram.port);
+        }
+        _updateDiscoveredDevice(deviceInfo);
+      }
+    } catch (e) {
+      if (_verbose) print('Error handling UDP message: $e');
+    }
+  }
+
+  static Future<void> _sendUdpResponse(
+    InternetAddress address,
+    int port,
+  ) async {
+    try {
+      final deviceInfo = await _getDeviceInfo();
+      if (deviceInfo.ip == 'unknown') return;
+
+      final message = jsonEncode({
+        'type': 'discovery_response',
+        'data': deviceInfo.toJson(),
+      });
+
+      _udpSocket?.send(utf8.encode(message), address, port);
+      if (_verbose) print('Sent UDP response to ${address.address}:$port');
+    } catch (e) {
+      if (_verbose) print('Error sending UDP response: $e');
+    }
+  }
+
+  static Future<void> _handleDiscoveredService(BonsoirService? service) async {
+    if (service == null) return;
+
+    try {
+      final attributes = service.attributes;
+      String? serviceIp;
+      String? serviceId;
+
+      // Try to get ID and IP from attributes
+      final attrId = attributes['id'];
+      final attrIp = attributes['ip'];
+      if (attrId != null) serviceId = attrId.toString();
+      if (attrIp != null) serviceIp = attrIp.toString();
+
+      // Skip our own service
+      if (serviceId != null && serviceId == _currentDeviceId) {
+        return;
+      }
+
+      // If IP is not in attributes, try to get from addresses
+      if (serviceIp == null) {
+        final addresses = service.toJson()['addresses'] as List<dynamic>?;
+        if (addresses != null && addresses.isNotEmpty) {
+          serviceIp = addresses.first.toString();
+        }
+      }
+
+      // Skip if service resolves to our own IP (self)
+      try {
+        final me = await _getDeviceInfo();
+        if (serviceIp != null && me.ip == serviceIp) {
+          return;
+        }
+      } catch (_) {}
+
+      // Prefer transfer port (tport), then service.port, then uport, then fallback
+      int port = service.port != 0 ? service.port : _mdnsPort;
+      final tportAttr = attributes['tport'];
+      final uportAttr = attributes['uport'];
+      if (tportAttr != null) {
+        port = int.tryParse(tportAttr.toString()) ?? port;
+      } else if (uportAttr != null) {
+        port = int.tryParse(uportAttr.toString()) ?? port;
+      }
+
+      // Ensure we have the mandatory data we need to establish a connection
+      if (serviceId == null || serviceIp == null || port <= 0) {
+        if (_verbose) {
+          print(
+            'Ignoring mDNS record due to missing data. id: $serviceId, ip: $serviceIp, port: $port',
+          );
+        }
+        return;
+      }
+
+      final deviceInfo = DeviceInfo(
+        id: serviceId,
+        name: service.name,
+        ip: serviceIp,
+        port: port,
+        lastSeen: DateTime.now(),
+      );
+      _updateDiscoveredDevice(deviceInfo);
+    } catch (e) {
+      if (_verbose) print('Error handling discovered service: $e');
+    }
+  }
+
+  static void _handleLostService(BonsoirService? service) {
+    if (service == null) return;
+
+    try {
+      final attributes = service.attributes;
+      final attrId = attributes['id'];
+      final deviceId = attrId?.toString();
+
+      if (deviceId != null) {
+        _discoveredDevices.remove(deviceId);
+        _devicesController.add(_discoveredDevices.values.toList());
+      }
+    } catch (e) {
+      if (_verbose) print('Error handling lost service: $e');
+    }
+  }
+
+  static void _updateDiscoveredDevice(DeviceInfo deviceInfo) {
+    if (deviceInfo.id.isEmpty || deviceInfo.ip == 'unknown') return;
+    // Ignore self by id or ip
+    if (deviceInfo.id == _currentDeviceId ||
+        deviceInfo.ip == _currentDeviceIp) {
+      return;
+    }
+
+    // Ignore records missing a usable transfer port
+    if (deviceInfo.port <= 0) {
+      if (_verbose) {
+        print('Ignoring device without valid port: ${deviceInfo.toJson()}');
+      }
+      return;
+    }
+
+    // Deduplicate by IP. Retain the entry that contains the most useful information (valid port wins)
+    String existingKey = '';
+    for (final e in _discoveredDevices.entries) {
+      if (e.value.ip == deviceInfo.ip && e.key != deviceInfo.id) {
+        existingKey = e.key;
+        break;
+      }
+    }
+    if (existingKey.isNotEmpty) {
+      final existing = _discoveredDevices[existingKey]!;
+      // If current record lacks port but existing has one, keep existing
+      if (existing.port > 0 && deviceInfo.port <= 0) {
+        return;
+      }
+      _discoveredDevices.remove(existingKey);
+    }
+
+    _discoveredDevices[deviceInfo.id] = deviceInfo;
+    _devicesController.add(_discoveredDevices.values.toList());
+    if (_verbose) print('Updated device: ${deviceInfo.toJson()}');
+  }
+
+  static Future<void> _startCleanupTimer() async {
+    _cleanupTimer?.cancel();
+    final cleanupInterval = Platform.isWindows
+        ? const Duration(seconds: 30) // More frequent cleanup on Windows
+        : const Duration(minutes: 1); // Normal interval for other platforms
+
+    _cleanupTimer = Timer.periodic(cleanupInterval, (_) {
+      final now = DateTime.now();
+      _discoveredDevices.removeWhere((_, device) {
+        final shouldRemove =
+            now.difference(device.lastSeen) > _cleanupThreshold;
+        if (_verbose && shouldRemove) {
+          print('Removing stale device: ${device.toJson()}');
+        }
+        return shouldRemove;
+      });
+      _devicesController.add(_discoveredDevices.values.toList());
+    });
+  }
+
+  static void _startNetworkMonitoring() {
+    _networkCheckTimer?.cancel();
+    _networkCheckTimer = Timer.periodic(const Duration(seconds: 30), (_) async {
+      if (!_isStarted || _isInitializing) return;
+
+      try {
+        final currentInfo = await _getDeviceInfo();
+        if (currentInfo.ip == 'unknown') {
+          print('Network appears to be down, scheduling reconnect...');
+          _scheduleReconnect();
+        } else {
+          // Verify UDP socket is still functional
+          try {
+            if (!Platform.isIOS) {
+              final healthMsg = jsonEncode({
+                'type': 'health_check',
+                'ts': DateTime.now().millisecondsSinceEpoch,
+              });
+              _udpSocket?.send(
+                utf8.encode(healthMsg),
+                InternetAddress('127.0.0.1'),
+                _udpPort,
+              );
+            }
+          } catch (e) {
+            if (_verbose) {
+              print('UDP socket test failed, scheduling reconnect...');
+            }
+            _scheduleReconnect();
+          }
+        }
+      } catch (e) {
+        if (_verbose) print('Error during network check: $e');
+      }
+    });
   }
 
   static Future<DeviceInfo> _getDeviceInfo() async {
@@ -425,7 +880,9 @@ class DeviceDiscoveryService {
     final deviceInfo = DeviceInfoPlugin();
 
     String deviceId = prefs.getString('device_id') ?? const Uuid().v4();
-    String deviceName = prefs.getString('device_name') ?? 'CPS Share Device';
+    await prefs.setString('device_id', deviceId);
+
+    String deviceName = prefs.getString('device_name') ?? 'AeDove Device';
 
     if (Platform.isAndroid) {
       final androidInfo = await deviceInfo.androidInfo;
@@ -435,16 +892,14 @@ class DeviceDiscoveryService {
       deviceName = iosInfo.name;
     }
 
-    String ipAddress = 'unknown';
-    
-    if (Platform.isWindows) {
-      try {
+    String ipAddress;
+    try {
+      if (Platform.isWindows) {
         final interfaces = await NetworkInterface.list(
           includeLinkLocal: false,
           type: InternetAddressType.IPv4,
         );
-        
-        // Find the first non-loopback IPv4 address
+        ipAddress = 'unknown';
         for (var interface in interfaces) {
           for (var addr in interface.addresses) {
             if (!addr.isLoopback && addr.type == InternetAddressType.IPv4) {
@@ -454,37 +909,39 @@ class DeviceDiscoveryService {
           }
           if (ipAddress != 'unknown') break;
         }
-        print('Windows IP address detected: $ipAddress');
-      } catch (e) {
-        print('Error getting Windows IP: $e');
+      } else {
+        final networkInfo = NetworkInfo();
+        ipAddress = await networkInfo.getWifiIP() ?? 'unknown';
       }
-    } else {
-      final networkInfo = NetworkInfo();
-      ipAddress = await networkInfo.getWifiIP() ?? 'unknown';
+
+      if (ipAddress == 'unknown') {
+        // Fallback to manual network interface check
+        final interfaces = await NetworkInterface.list(
+          includeLinkLocal: false,
+          type: InternetAddressType.IPv4,
+        );
+        for (var interface in interfaces) {
+          for (var addr in interface.addresses) {
+            if (!addr.isLoopback && addr.type == InternetAddressType.IPv4) {
+              ipAddress = addr.address;
+              break;
+            }
+          }
+          if (ipAddress != 'unknown') break;
+        }
+      }
+    } catch (e) {
+      print('Error getting IP address: $e');
+      ipAddress = 'unknown';
     }
 
     return DeviceInfo(
       id: deviceId,
       name: deviceName,
       ip: ipAddress,
-      port: _currentPort,
+      // Advertise our actual file transfer port so peers can connect correctly
+      port: FileTransferService.getServerPort(),
       lastSeen: DateTime.now(),
     );
-  }
-
-  static String _getNetworkBase(String ip) {
-    final parts = ip.split('.');
-    return '${parts[0]}.${parts[1]}.${parts[2]}';
-  }
-
-  static void _cleanupOfflineDevices() {
-    final now = DateTime.now();
-    final offlineThreshold = const Duration(minutes: 2);
-
-    _discoveredDevices.removeWhere((id, device) {
-      return now.difference(device.lastSeen) > offlineThreshold;
-    });
-
-    _devicesController.add(_discoveredDevices.values.toList());
   }
 }

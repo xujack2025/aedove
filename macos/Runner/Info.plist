@@ -1,54 +1,61 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
-<dict>
-	<key>CFBundleDevelopmentRegion</key>
-	<string>$(DEVELOPMENT_LANGUAGE)</string>
-	<key>CFBundleExecutable</key>
-	<string>$(EXECUTABLE_NAME)</string>
-	<key>CFBundleIconFile</key>
-	<string></string>
-	<key>CFBundleIdentifier</key>
-	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
-	<key>CFBundleInfoDictionaryVersion</key>
-	<string>6.0</string>
-	<key>CFBundleName</key>
-	<string>$(PRODUCT_NAME)</string>
-    <key>CFBundleDisplayName</key>
-    <string>CP Share</string>
-	<key>CFBundlePackageType</key>
-	<string>APPL</string>
-	<key>CFBundleShortVersionString</key>
-	<string>$(FLUTTER_BUILD_NAME)</string>
-	<key>CFBundleVersion</key>
-	<string>$(FLUTTER_BUILD_NUMBER)</string>
-	<key>LSMinimumSystemVersion</key>
-	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
-	<key>NSHumanReadableCopyright</key>
-	<string>$(PRODUCT_COPYRIGHT)</string>
-	<key>NSMainNibFile</key>
-	<string>MainMenu</string>
-	<key>NSPrincipalClass</key>
-	<string>NSApplication</string>
-
-	<!-- Permissions -->
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>This app needs access to your photo library to save and load media.</string>
-	<key>NSDownloadsFolderUsageDescription</key>
-	<string>This app needs access to the Downloads folder to save received files.</string>
-	<key>NSDocumentsFolderUsageDescription</key>
-	<string>This app needs access to the Documents folder to share files.</string>
-	<key>NSDesktopFolderUsageDescription</key>
-	<string>This app needs access to the Desktop folder to save shared files.</string>
-	<key>NSRemovableVolumesUsageDescription</key>
-	<string>This app needs access to external drives and USBs to save or load files.</string>
-    <key>NSPhotoLibraryAddUsageDescription</key>
-    <string>The app saves received media to the photo library.</string>
-    <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-    <string>The app requires the local IP to communicate.</string>
-    <key>NSLocationWhenInUseUsageDescription</key>
-    <string>The app requires the local IP to communicate.</string>
-    <key>NSLocalNetworkUsageDescription</key>
-    <string>The app uses the local network to find and connect to nearby devices.</string>
-</dict>
+	<dict>
+		<key>CFBundleDevelopmentRegion</key>
+		<string>$(DEVELOPMENT_LANGUAGE)</string>
+		<key>CFBundleDisplayName</key>
+		<string>AeDove</string>
+		<key>CFBundleExecutable</key>
+		<string>$(EXECUTABLE_NAME)</string>
+		<key>CFBundleIconFile</key>
+		<string></string>
+		<key>CFBundleIdentifier</key>
+		<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+		<key>CFBundleInfoDictionaryVersion</key>
+		<string>6.0</string>
+		<key>CFBundleName</key>
+		<string>$(PRODUCT_NAME)</string>
+		<key>CFBundlePackageType</key>
+		<string>APPL</string>
+		<key>CFBundleShortVersionString</key>
+		<string>$(FLUTTER_BUILD_NAME)</string>
+		<key>CFBundleVersion</key>
+		<string>$(FLUTTER_BUILD_NUMBER)</string>
+		<key>LSMinimumSystemVersion</key>
+		<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
+		<key>LSApplicationCategoryType</key>
+		<string>public.app-category.utilities</string>
+		<key>NSDesktopFolderUsageDescription</key>
+		<string>Allow saving received files to the Desktop when you choose to save there. Files are
+			stored only with user confirmation.</string>
+		<key>NSDocumentsFolderUsageDescription</key>
+		<string>Allow access to the Documents folder to let you send or save files you select. Files
+			are accessed only with user consent.</string>
+		<key>NSDownloadsFolderUsageDescription</key>
+		<string>Allow saving received files to Downloads when you choose to save there. Files are
+			saved only with user confirmation.</string>
+		<key>NSHumanReadableCopyright</key>
+		<string>$(PRODUCT_COPYRIGHT)</string>
+		<key>NSLocalNetworkUsageDescription</key>
+		<string>Discover nearby devices on the local Wi‑Fi to enable direct file transfers. This is
+			used only for local discovery and transfers; no location, device lists, or personal data
+			is collected or sent to our servers.</string>
+		<key>NSRemovableVolumesUsageDescription</key>
+		<string>Allow access to external drives and USBs to send or save files at your request. No
+			data is collected or uploaded.</string>
+		<key>NSMainNibFile</key>
+		<string>MainMenu</string>
+		<!-- Photo library -->
+		<key>NSPhotoLibraryUsageDescription</key>
+		<string>Allow selecting photos and videos to share with nearby devices. Media is accessed
+			only when you choose it and is not uploaded without permission.</string>
+		<key>NSPhotoLibraryAddUsageDescription</key>
+		<string>Allow saving received photos and videos to your photo library when you confirm.</string>
+		<!-- File sharing -->
+		<key>UIFileSharingEnabled</key>
+		<true />
+		<key>NSPrincipalClass</key>
+		<string>NSApplication</string>
+	</dict>
 </plist>
