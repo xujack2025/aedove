@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'package:flutter/services.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -117,79 +116,40 @@ class MediaStoreService {
     String fileName,
     List<int> bytes,
   ) async {
-    // First check storage permission
-    if (!await _checkStoragePermission()) {
-      throw Exception('Storage permission denied');
-    }
+    // Check storage permission (will return true even if limited to allow app-specific storage)
+    await _checkStoragePermission();
 
-    // Try to use platform MediaStore (via MethodChannel) to save into Downloads
-    const channel = MethodChannel('drop.media_store');
+    // Android 10+ (API 29+): Use scoped storage
+    // Save to app-specific external storage which doesn't require special permissions
     try {
-      final result = await channel.invokeMethod<String>('saveFileToDownloads', {
-        'fileName': fileName,
-        'bytes': bytes,
-      });
-      if (result != null && result.isNotEmpty) {
-        print('File saved via MediaStore: $result');
-        return result;
-      }
-    } catch (e) {
-      print('MediaStore save failed or not available: $e');
-    }
+      // Get app-specific external storage directory for downloads
+      // This is accessible without MANAGE_EXTERNAL_STORAGE and survives app uninstall
+      final List<Directory>? appDownloadDirs =
+          await getExternalStorageDirectories(type: StorageDirectory.downloads);
 
-    // Fallback: try writing directly to Downloads
-    try {
-      // Try to get the platform-specific Downloads directory instead of hardcoding
-      List<Directory>? externalDownloads = await getExternalStorageDirectories(
-        type: StorageDirectory.downloads,
-      );
+      if (appDownloadDirs != null && appDownloadDirs.isNotEmpty) {
+        final downloadDir = appDownloadDirs.first;
 
-      Directory downloadDir;
-      if (externalDownloads != null && externalDownloads.isNotEmpty) {
-        downloadDir = externalDownloads.first;
-      } else {
-        // Fallback: try app external storage root and derive Download folder if possible
-        final extDir = await getExternalStorageDirectory();
-        if (extDir != null) {
-          // Many devices place public storage at the path before "Android"
-          final parts = extDir.path.split(Platform.pathSeparator);
-          final androidIndex = parts.indexWhere(
-            (p) => p.toLowerCase() == 'android',
-          );
-          String rootPath;
-          if (androidIndex > 0) {
-            rootPath = parts
-                .sublist(0, androidIndex)
-                .join(Platform.pathSeparator);
-          } else {
-            rootPath = extDir.path;
-          }
-          downloadDir = Directory(path.join(rootPath, 'Download'));
-        } else {
-          // Last resort: common Android download path
-          downloadDir = Directory('/storage/emulated/0/Download');
+        if (!await downloadDir.exists()) {
+          await downloadDir.create(recursive: true);
         }
-      }
 
-      if (!await downloadDir.exists()) {
-        await downloadDir.create(recursive: true);
-      }
+        final filePath = path.join(downloadDir.path, fileName);
+        String uniqueFilePath = await _getUniqueFilePath(filePath);
+        final uniqueFile = File(uniqueFilePath);
 
-      final filePath = path.join(downloadDir.path, fileName);
-      String uniqueFilePath = await _getUniqueFilePath(filePath);
-      final uniqueFile = File(uniqueFilePath);
-      try {
         await uniqueFile.writeAsBytes(bytes);
-        print('File saved successfully to: $uniqueFilePath');
+        print(
+          'File saved successfully to app-specific storage: $uniqueFilePath',
+        );
         return uniqueFilePath;
-      } catch (e) {
-        print('Error writing to Downloads: $e');
-        return await _saveToAppStorage(fileName, bytes);
       }
     } catch (e) {
-      print('Error accessing Downloads directory: $e');
-      return await _saveToAppStorage(fileName, bytes);
+      print('Error saving to app-specific external storage: $e');
     }
+
+    // Fallback: save to app internal storage (always works, no permission needed)
+    return await _saveToAppStorage(fileName, bytes);
   }
 
   /// Save file to app-specific storage when external storage is not available
@@ -215,13 +175,34 @@ class MediaStoreService {
   /// Check and request storage permission if needed
   static Future<bool> _checkStoragePermission() async {
     if (Platform.isAndroid) {
-      final status = await Permission.storage.status;
-      if (status.isDenied) {
-        final result = await Permission.storage.request();
-        return result.isGranted;
+      // Try media permissions first (Android 13+)
+      try {
+        final photosStatus = await Permission.photos.status;
+        final videosStatus = await Permission.videos.status;
+
+        if (photosStatus.isGranted ||
+            photosStatus.isLimited ||
+            videosStatus.isGranted ||
+            videosStatus.isLimited) {
+          return true;
+        }
+      } catch (e) {
+        print('Media permissions not available: $e');
       }
-      return status.isGranted;
+
+      // Try legacy storage permission (Android 10-12)
+      try {
+        final status = await Permission.storage.status;
+        if (status.isDenied) {
+          final result = await Permission.storage.request();
+          return result.isGranted || result.isLimited;
+        }
+        return status.isGranted || status.isLimited;
+      } catch (e) {
+        print('Storage permission check failed: $e');
+      }
     }
+    // Return true to allow fallback to app-specific storage
     return true;
   }
 
