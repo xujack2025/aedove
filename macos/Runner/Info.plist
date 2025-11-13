@@ -37,6 +37,11 @@
 			saved only with user confirmation.</string>
 		<key>NSHumanReadableCopyright</key>
 		<string>$(PRODUCT_COPYRIGHT)</string>
+		<key>NSBonjourServices</key>
+		<array>
+			<string>_aedove._tcp</string>
+			<string>_aedove._tcp.</string>
+		</array>
 		<key>NSLocalNetworkUsageDescription</key>
 		<string>Discover nearby devices on the local Wi‑Fi to enable direct file transfers. This is
 			used only for local discovery and transfers; no location, device lists, or personal data
