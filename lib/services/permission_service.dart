@@ -12,22 +12,43 @@ class PermissionService {
         // Desktop platforms handle file access through system dialogs
         return true;
       } else if (Platform.isAndroid) {
-        // Request regular storage permission first
-        final status = await Permission.storage.request();
-        // Accept both granted and limited access (Android 13+ allows limited photo/media access)
-        if (status.isGranted || status.isLimited) return true;
+        // Android 13+ (API 33+): Request granular media permissions
+        // Android 10-12 (API 29-32): Use scoped storage (no special permission needed for app-specific dirs)
+        // Android 9 and below: Request storage permission
 
-        // For Android 11+ try manage external storage. Request it and return
-        // granted if the user approves. Some devices or plugin versions may
-        // not support this permission, so wrap in try/catch.
+        // Try requesting photos/videos/audio permissions (Android 13+)
         try {
-          final manageStatus = await Permission.manageExternalStorage.request();
-          if (manageStatus.isGranted || manageStatus.isLimited) return true;
+          final photosStatus = await Permission.photos.request();
+          final videosStatus = await Permission.videos.request();
+          final audioStatus = await Permission.audio.request();
+
+          // If any media permission is granted, that's sufficient
+          if (photosStatus.isGranted ||
+              photosStatus.isLimited ||
+              videosStatus.isGranted ||
+              videosStatus.isLimited ||
+              audioStatus.isGranted ||
+              audioStatus.isLimited) {
+            return true;
+          }
         } catch (e) {
-          print('manageExternalStorage not supported or failed: $e');
+          print('Media permissions not available (likely older Android): $e');
         }
 
-        return false;
+        // Fallback to legacy storage permission for Android 10-12
+        try {
+          final status = await Permission.storage.request();
+          if (status.isGranted || status.isLimited) return true;
+        } catch (e) {
+          print('Storage permission request failed: $e');
+        }
+
+        // Even if permissions are denied, app can still save to app-specific storage
+        // So return true to allow the app to continue
+        print(
+          'Storage permissions not fully granted, will use app-specific storage',
+        );
+        return true;
       } else if (Platform.isIOS) {
         // iOS doesn't require storage permission for basic functionality
         // Only request photos permission if needed for saving to Photos library
