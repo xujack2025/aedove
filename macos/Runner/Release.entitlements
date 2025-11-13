@@ -12,14 +12,6 @@
 	<true/>
 	<key>com.apple.security.files.downloads.read-write</key>
 	<true/>
-	<key>com.apple.security.files.documents.read-write</key>
-	<true/>
-	<key>com.apple.security.files.audio-visual-content</key>
-	<true/>
-	<key>com.apple.security.files.desktop.read-write</key>
-	<true/>
-	<key>com.apple.security.files.removable-media.read-write</key>
-	<true/>
 	<key>com.apple.security.personal-information.photos-library</key>
 	<true/>
 </dict>
