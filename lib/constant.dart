@@ -1,7 +1,7 @@
 class Constant {
   static final String AD_URL =
-      "https://appecast.com/App/99-Test/NAViPLAY-2.html";
+      "https://solidsubs.com/A09-Mobile-Ads-App/Attachments/hp-advertise-today.png";
 
   static final String AD_API =
-      "https://mocki.io/v1/5f489902-df2e-4db4-a0d0-b8eb817015ed";
+      "https://solidsubs.com/A09-MAA-RS/ADS-API/mobile-ads-api.php";
 }

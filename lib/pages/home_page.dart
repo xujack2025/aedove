@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:permission_handler/permission_handler.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:aedove/pages/tabs/receive_tab.dart';
 import 'package:aedove/pages/tabs/send_tab.dart';
@@ -11,6 +12,7 @@ import 'package:aedove/pages/tabs/settings_tab.dart';
 import 'package:aedove/services/permission_service.dart';
 import 'package:aedove/services/device_discovery_service.dart';
 import 'package:aedove/constant.dart';
+import 'package:aedove/adWebView.dart';
 
 enum HomeTab {
   receive(Icons.wifi),
@@ -51,80 +53,154 @@ class _HomePageState extends State<HomePage>
 
   // ========================= WEBVIEW CONTROLLERS =========================
   // ignore: unused_field
-  InAppWebViewController? _webViewController;
+  InAppWebViewController? _adWebViewController;
 
   // ========================= ADS =========================
   // ignore: unused_field
   bool _isExpanded = true;
-  bool _naviPlayVisibility = false;
+  bool _naviPlayVisibility = true;
   bool _popupAlive = true;
-  Timer? _visibilityTimer;
-  Timer? _closerTimer;
-  final String _popupBannerLink = Constant.AD_URL;
+  bool _loginStop = false;
+  Timer? _visibleTimer;
+  Timer? _hiddenTimer;
+
+  late List adLinkDurationData;
+  int adLinksIndex = 0;
+  bool _navistatus = false;
+  String _popupBannerLink = Constant.AD_URL;
   final String _durationAPILink = Constant.AD_API;
-  int _hideDurationSeconds = 60;
-  int _showDurationSeconds = 0;
 
   @override
   void initState() {
     super.initState();
     _requestPermissions();
     _startDeviceDiscovery();
-    _fetchDurationData();
-    _startVisibilityTimer();
+    _fetchLink_Duration();
   }
 
   // ========================= ADS FLOW (FETCH, ROTATE, TIMERS) =========================
+
+  void _reloadWebViewAD() {
+    if (_adWebViewController != null) {
+      _adWebViewController!.loadUrl(
+        urlRequest: URLRequest(url: WebUri(_popupBannerLink)),
+      );
+    }
+  }
+
   void _toggleNaviPlay() {
-    _fetchDurationData();
+    if (!_loginStop) {
+      setState(() {
+        _naviPlayVisibility = false;
+        _popupAlive = !_popupAlive;
+        if (_popupAlive == true) {
+          _isExpanded = true;
+          _naviPlayVisibility = true;
+        }
+      });
+    }
+  }
+
+  Future<void> _fetchLink_Duration() async {
+    try {
+      final responseData = await http.get(Uri.parse(_durationAPILink));
+      if (responseData.statusCode == 200) {
+        final jsonData = jsonDecode(responseData.body);
+        adLinkDurationData = jsonData['advertisements'];
+        if (adLinkDurationData.isEmpty) {
+          print("Stopping Ads 1");
+          adLinkDurationData = [];
+          setState(() {
+            _navistatus = false;
+          });
+          _hiddenTimer?.cancel();
+          _visibleTimer?.cancel();
+        } else if (_navistatus == false && adLinkDurationData.isNotEmpty) {
+          setState(() {
+            _navistatus = true;
+          });
+          _linkChanger();
+        } else {
+          _linkChanger();
+        }
+      }
+    } catch (e) {
+      print("error occured: $e");
+    }
+  }
+
+  void _linkChanger() {
+    if (adLinkDurationData.isNotEmpty) {
+      Map<String, dynamic> bannerItem = adLinkDurationData[adLinksIndex];
+      String link = bannerItem['link'];
+      int show_duration = (bannerItem['show']);
+      int hide_duration = (bannerItem['hide']);
+      _popupBannerLink = link;
+      _reloadWebViewAD();
+      if (_adWebViewController != null) {
+        _adWebViewController!.loadUrl(
+          urlRequest: URLRequest(url: WebUri(_popupBannerLink)),
+        );
+      }
+      _visibleADTimer(show_duration, hide_duration);
+    } else {
+      print("Stopping Ads 2");
+      adLinkDurationData = [];
+      _navistatus = false;
+      _hiddenTimer?.cancel();
+      _visibleTimer?.cancel();
+    }
+  }
+
+  void _visibleADTimer(int timerDuration, int hidetimerDuration) {
+    _reloadWebViewAD();
+    print("Showing: $timerDuration");
+    _hiddenTimer?.cancel();
+    _visibleTimer = Timer.periodic(Duration(seconds: timerDuration), (timer) {
+      if (!_loginStop) {
+        _toggleNaviPlay();
+        _hiddenADTimer(hidetimerDuration);
+      }
+    });
+  }
+
+  void _hiddenADTimer(int hidetimerDuration) {
+    print("Hiding: $hidetimerDuration");
+    _isExpanded = false;
+    _visibleTimer?.cancel();
+    _hiddenTimer = Timer.periodic(Duration(seconds: hidetimerDuration), (
+      timer,
+    ) {
+      if (!_loginStop) {
+        _toggleNaviPlay();
+        adLinksIndex++;
+        if (adLinksIndex == adLinkDurationData.length) {
+          _fetchLink_Duration();
+          adLinksIndex = 0;
+        } else {
+          _linkChanger();
+        }
+        _hiddenTimer?.cancel();
+      }
+    });
+  }
+
+  void _toggleExpanded() {
     setState(() {
-      _naviPlayVisibility = false;
-      _popupAlive = !_popupAlive;
-      if (_popupAlive == true) {
-        _isExpanded = true;
+      _isExpanded = !_isExpanded;
+      if (_naviPlayVisibility == true) {
+        _naviPlayVisibility = false;
+      } else if (_isExpanded == true) {
         _naviPlayVisibility = true;
       }
     });
   }
 
-  void _startVisibilityTimer() {
-    _fetchDurationData();
-    _closerTimer?.cancel();
-    _visibilityTimer = Timer.periodic(Duration(seconds: _showDurationSeconds), (
-      timer,
-    ) {
-      _toggleNaviPlay();
-      _startCloseTimer();
-    });
-  }
-
-  void _startCloseTimer() {
-    _fetchDurationData();
-    _visibilityTimer?.cancel();
-    _closerTimer = Timer.periodic(Duration(seconds: _hideDurationSeconds), (
-      timer,
-    ) {
-      _toggleNaviPlay();
-      _startVisibilityTimer();
-    });
-  }
-
-  Future<void> _fetchDurationData() async {
+  Future<void> _launchUrl(Uri url) async {
     try {
-      final response = await http.get(Uri.parse(_durationAPILink));
-      // print(response.body);
-
-      if (response.statusCode == 200) {
-        final jsonData = jsonDecode(response.body);
-        _hideDurationSeconds = jsonData['hideDuration'];
-        _showDurationSeconds = jsonData['showDuration'];
-      } else {
-        _hideDurationSeconds = 150;
-        _showDurationSeconds = 15;
-      }
-    } catch (e) {
-      _hideDurationSeconds = 150;
-      _showDurationSeconds = 15;
+      await launchUrl((url), mode: LaunchMode.externalApplication);
+    } catch (exception) {
+      print(exception);
     }
   }
 
@@ -292,16 +368,13 @@ class _HomePageState extends State<HomePage>
           ),
 
           // Animated ad banner at the bottom
-          AnimatedPositioned(
-            duration: const Duration(milliseconds: 300),
-            bottom: _naviPlayVisibility
-                ? 0
-                : -MediaQuery.of(context).size.height * 0.20,
-            left: 0,
-            right: 0,
-            height: MediaQuery.of(context).size.height * 0.20,
-            child: IgnorePointer(
-              ignoring: !_naviPlayVisibility,
+          if (_naviPlayVisibility)
+            AnimatedPositioned(
+              duration: const Duration(milliseconds: 300),
+              bottom: 0,
+              left: 0,
+              right: 0,
+              height: MediaQuery.of(context).size.height * 0.20,
               child: InAppWebView(
                 initialUrlRequest: URLRequest(url: WebUri(_popupBannerLink)),
                 initialSettings: InAppWebViewSettings(
@@ -317,7 +390,7 @@ class _HomePageState extends State<HomePage>
                   suppressesIncrementalRendering: true,
                 ),
                 onWebViewCreated: (controller) {
-                  _webViewController = controller;
+                  _adWebViewController = controller;
 
                   // Inject JavaScript to prevent all input focus
                   controller.evaluateJavascript(
@@ -351,6 +424,24 @@ class _HomePageState extends State<HomePage>
                     """,
                   );
                 },
+                shouldOverrideUrlLoading: (controller, action) async {
+                  final url = action.request.url;
+                  if (url == null) return NavigationActionPolicy.CANCEL;
+
+                  // Keep your redirect logic
+                  if (url.toString().contains("RS-AD-Redirect")) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => WebViewPage(url: url.toString()),
+                      ),
+                    );
+                    await _adWebViewController?.reload();
+                    return NavigationActionPolicy.CANCEL;
+                  }
+
+                  return NavigationActionPolicy.ALLOW;
+                },
                 onLoadStop: (controller, url) async {
                   // Remove focus from any input fields after page loads
                   await controller.evaluateJavascript(
@@ -372,7 +463,6 @@ class _HomePageState extends State<HomePage>
                 },
               ),
             ),
-          ),
         ],
       ),
       bottomNavigationBar: NavigationBar(
@@ -386,21 +476,14 @@ class _HomePageState extends State<HomePage>
           return NavigationDestination(icon: Icon(tab.icon), label: tab.label);
         }).toList(),
       ),
-      floatingActionButton: _naviPlayVisibility
+      floatingActionButton: _navistatus
           ? FloatingActionButton(
-              backgroundColor: Colors.transparent,
-              onPressed: () {
-                _closerTimer?.cancel();
-                _visibilityTimer?.cancel();
-                setState(() {
-                  _naviPlayVisibility = false; // Hide ad immediately
-                });
-                _startCloseTimer(); // Restart the hide timer
-              },
-              mini: true,
-              child: const Icon(Icons.close_rounded),
+              backgroundColor: Color(0xFF303030),
+              foregroundColor: Color(0xFFFFFFFF),
+              onPressed: _toggleExpanded,
+              child: _isExpanded ? Icon(Icons.close) : Text("AD"),
             )
-          : null,
+          : SizedBox.shrink(),
       floatingActionButtonLocation: FloatingActionButtonLocation.miniEndFloat,
     );
   }
