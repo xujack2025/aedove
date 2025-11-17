@@ -488,10 +488,13 @@ class DeviceDiscoveryService {
       _udpSocket?.close();
       _udpSocket = null;
 
-      // Create new socket
+      // Create new socket without reusePort to avoid Android compatibility issues
       _udpSocket = await RawDatagramSocket.bind(
         InternetAddress.anyIPv4,
         _udpPort,
+        reuseAddress:
+            true, // Use reuseAddress instead of reusePort for better compatibility
+        reusePort: false, // Explicitly disable reusePort on Android
       );
       _udpSocket!.broadcastEnabled = true;
 
@@ -503,13 +506,31 @@ class DeviceDiscoveryService {
           }
         },
         onError: (e) {
+          // Suppress reusePort warnings as they're not critical
+          if (e.toString().contains('reusePort')) {
+            return; // Ignore this specific error
+          }
           print('UDP socket error: $e');
-          _scheduleReconnect();
+          // Don't reconnect immediately on every error to avoid loop
+          // Only reconnect if socket is actually broken
+          if (e.toString().contains('Closed') ||
+              e.toString().contains('Bad file descriptor')) {
+            try {
+              _udpSocket?.close();
+            } catch (_) {}
+            _udpSocket = null;
+            _scheduleReconnect();
+          }
         },
         onDone: () {
           print('UDP socket closed unexpectedly');
+          try {
+            _udpSocket?.close();
+          } catch (_) {}
+          _udpSocket = null;
           _scheduleReconnect();
         },
+        cancelOnError: false, // Keep listening even after errors
       );
 
       // Start periodic broadcast (disable on iOS: only listen/respond)
@@ -546,10 +567,17 @@ class DeviceDiscoveryService {
 
   static Future<void> _sendUdpBroadcast() async {
     if (!_isStarted) return;
+    if (_udpSocket == null) {
+      print('UDP socket is null, skipping broadcast');
+      return;
+    }
 
     try {
       final deviceInfo = await _getDeviceInfo();
-      if (deviceInfo.ip == 'unknown') return;
+      if (deviceInfo.ip == 'unknown') {
+        if (_verbose) print('Cannot broadcast: IP address unknown');
+        return;
+      }
 
       final message = jsonEncode({
         'type': 'discovery',
@@ -575,7 +603,8 @@ class DeviceDiscoveryService {
                 // Add small delay to prevent flooding
                 await Future.delayed(const Duration(milliseconds: 5));
               } catch (e) {
-                // Ignore individual send errors
+                // Silently ignore individual send errors to prevent spam
+                if (_verbose) print('Failed to send to $targetIp: $e');
               }
             }
           }
@@ -594,7 +623,9 @@ class DeviceDiscoveryService {
                 InternetAddress('255.255.255.255'),
                 _udpPort,
               );
-            } catch (_) {}
+            } catch (e) {
+              if (_verbose) print('Global broadcast failed: $e');
+            }
             // Directed broadcast for the subnet
             try {
               _udpSocket?.send(
@@ -602,7 +633,9 @@ class DeviceDiscoveryService {
                 InternetAddress('$networkBase.255'),
                 _udpPort,
               );
-            } catch (_) {}
+            } catch (e) {
+              if (_verbose) print('Subnet broadcast failed: $e');
+            }
           } else {
             // iOS: avoid 255.255.255.255. Probe subnet sparsely to reduce cost
             for (int i = 1; i <= 254; i += 4) {
@@ -615,7 +648,9 @@ class DeviceDiscoveryService {
                     _udpPort,
                   );
                   await Future.delayed(const Duration(milliseconds: 2));
-                } catch (_) {}
+                } catch (e) {
+                  if (_verbose) print('Failed to send to $targetIp: $e');
+                }
               }
             }
           }
@@ -623,6 +658,7 @@ class DeviceDiscoveryService {
       }
     } catch (e) {
       if (_verbose) print('Error sending UDP broadcast: $e');
+      // Don't rethrow - let the timer continue
     }
   }
 

@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'dart:convert';
 import 'dart:async';
-import 'dart:developer' as dev;
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:aedove/services/notification_service.dart';
@@ -55,6 +54,7 @@ class FileTransferRequest {
 class FileTransferService {
   static const List<int> _fileTransferPorts = [8081, 8082, 8083, 8084, 8085];
   static int _currentPort = _fileTransferPorts[0];
+  static const bool _verbose = false; // Set to true to enable detailed logging
 
   /// Get the primary port used for file transfers
   static int getPrimaryPort() => _fileTransferPorts[0];
@@ -62,6 +62,7 @@ class FileTransferService {
   /// Get the actual bound server port
   static int getServerPort() => _currentPort;
   static HttpServer? _server;
+  static Timer? _healthCheckTimer;
   static final Map<String, FileTransferRequest> _pendingRequests = {};
   // Map of outgoing request id -> local file path (used by sender)
   static final Map<String, String> _outgoingFiles = {};
@@ -77,40 +78,105 @@ class FileTransferService {
   static List<FileTransferRequest> get pendingRequests =>
       _pendingRequests.values.toList();
 
+  /// Check if the file transfer server is running
+  static bool isServerRunning() {
+    final running = _server != null;
+    print(
+      'File transfer server status: ${running ? "RUNNING on port $_currentPort" : "NOT RUNNING"}',
+    );
+    return running;
+  }
+
+  /// Get diagnostic information about the server
+  static Map<String, dynamic> getServerDiagnostics() {
+    return {
+      'is_running': _server != null,
+      'current_port': _currentPort,
+      'pending_requests': _pendingRequests.length,
+      'available_ports': _fileTransferPorts,
+    };
+  }
+
   static Future<void> start() async {
     await _startFileTransferServer();
+    _startHealthCheck();
   }
 
   static Future<void> stop() async {
+    _healthCheckTimer?.cancel();
+    _healthCheckTimer = null;
     _server?.close();
     _requestsController.close();
   }
 
+  static void _startHealthCheck() {
+    _healthCheckTimer?.cancel();
+    _healthCheckTimer = Timer.periodic(const Duration(minutes: 2), (_) {
+      if (_server == null) {
+        print('⚠️ File transfer server is down! Attempting to restart...');
+        _startFileTransferServer().catchError((e) {
+          print('Failed to restart server: $e');
+        });
+      }
+      // Removed verbose health check log to reduce performance impact
+    });
+  }
+
   static Future<void> _startFileTransferServer() async {
+    print('Starting file transfer server...');
+    print('Attempting to bind to ports: $_fileTransferPorts');
+
     for (final port in _fileTransferPorts) {
       try {
+        print('Trying to bind to port $port...');
         _server = await HttpServer.bind(
           InternetAddress.anyIPv4,
           port,
-          shared: true, // Enable socket sharing
+          shared:
+              false, // Disable socket sharing to avoid reusePort issues on Android
         );
         _currentPort = port;
-        _server!.listen((HttpRequest request) {
-          _handleFileTransferRequest(request);
-        });
-        print('Successfully bound file transfer server to port $_currentPort');
+        _server!.listen(
+          (HttpRequest request) {
+            _handleFileTransferRequest(request);
+          },
+          onError: (error) {
+            print('Server error on port $_currentPort: $error');
+          },
+        );
+        print(
+          '✓ Successfully bound file transfer server to port $_currentPort',
+        );
+        print('Server listening on 0.0.0.0:$_currentPort');
         return;
-      } catch (e) {
-        print('Failed to bind file transfer server to port $port: $e');
+      } catch (e, stackTrace) {
+        print('✗ Failed to bind file transfer server to port $port');
+        print('Error: $e');
+        if (e.toString().contains('Address already in use') ||
+            e.toString().contains('bind failed')) {
+          print('Port $port is already in use, trying next port...');
+        } else {
+          print('Unexpected error: $e');
+          print('Stack trace: $stackTrace');
+        }
         continue;
       }
     }
-    throw Exception(
-      'Failed to bind file transfer server to any available port',
-    );
+
+    // If all ports failed, provide detailed error information
+    final errorMsg =
+        'Failed to bind file transfer server to any available port. '
+        'Tried ports: $_fileTransferPorts. This may be due to: '
+        '1) All ports are in use, '
+        '2) Firewall/security settings blocking ports, '
+        '3) Device-specific network restrictions. '
+        'Please restart the app or check device settings.';
+    print('ERROR: $errorMsg');
+    throw Exception(errorMsg);
   }
 
   static Future<void> _handleFileTransferRequest(HttpRequest request) async {
+    print('Received ${request.method} request to ${request.uri.path}');
     try {
       final remoteAddress = request.connectionInfo?.remoteAddress.address;
       if (remoteAddress == null || remoteAddress.isEmpty) {
@@ -121,29 +187,60 @@ class FileTransferService {
           ..close();
         return;
       }
+      print('Remote address: $remoteAddress');
 
       if (request.method == 'POST' && request.uri.path == '/request') {
         // Handle file transfer request
-        final body = await utf8.decodeStream(request);
-        final requestData = jsonDecode(body);
-        final transferRequest = FileTransferRequest.fromJson(requestData);
-        transferRequest.ipAddress = remoteAddress;
-        transferRequest.targetDeviceIP = remoteAddress;
+        print('Handling file transfer request...');
+        try {
+          final body = await utf8
+              .decodeStream(request)
+              .timeout(
+                const Duration(seconds: 5),
+                onTimeout: () => throw TimeoutException('Request body timeout'),
+              );
+          print('Request body received: ${body.length} bytes');
 
-        _pendingRequests[transferRequest.id] = transferRequest;
-        _requestsController.add(_pendingRequests.values.toList());
+          if (body.isEmpty) {
+            throw Exception('Empty request body');
+          }
 
-        // Show notification
-        await NotificationService.showFileTransferNotification(
-          senderId: transferRequest.senderId,
-          fileName: transferRequest.fileName,
-          fileSize: _formatFileSize(transferRequest.fileSize),
-        );
+          final requestData = jsonDecode(body);
+          print('Request data parsed: $requestData');
+          final transferRequest = FileTransferRequest.fromJson(requestData);
+          transferRequest.ipAddress = remoteAddress;
+          transferRequest.targetDeviceIP = remoteAddress;
 
-        request.response
-          ..statusCode = 200
-          ..write('OK')
-          ..close();
+          _pendingRequests[transferRequest.id] = transferRequest;
+          _requestsController.add(_pendingRequests.values.toList());
+          print('Transfer request added to pending list');
+
+          // Show notification
+          try {
+            await NotificationService.showFileTransferNotification(
+              senderId: transferRequest.senderId,
+              fileName: transferRequest.fileName,
+              fileSize: _formatFileSize(transferRequest.fileSize),
+            );
+            print('Notification shown successfully');
+          } catch (e) {
+            print('Error showing notification: $e');
+            // Don't fail the request if notification fails
+          }
+
+          request.response
+            ..statusCode = 200
+            ..write('OK')
+            ..close();
+          print('Response sent: 200 OK');
+        } catch (e) {
+          print('Error processing file transfer request: $e');
+          request.response
+            ..statusCode = 400
+            ..write('Bad request: $e')
+            ..close();
+          return;
+        }
       } else if (request.method == 'POST' && request.uri.path == '/accept') {
         // Handle file transfer acceptance (sender side receives this when
         // receiver accepted our request). The sender should push file bytes
@@ -172,7 +269,9 @@ class FileTransferService {
                     headers: {
                       'Content-Type': 'application/octet-stream',
                       'request_id': requestId,
-                      'file_name': transferRequest.fileName,
+                      'file_name': Uri.encodeComponent(
+                        transferRequest.fileName,
+                      ),
                     },
                     body: bytes,
                   );
@@ -210,8 +309,9 @@ class FileTransferService {
         // Receiver: accept raw file bytes from sender
         try {
           final requestId = request.headers.value('request_id') ?? '';
-          final fileName =
+          final encodedFileName =
               request.headers.value('file_name') ?? 'received_file';
+          final fileName = Uri.decodeComponent(encodedFileName);
 
           // Collect all bytes from the request
           final bytes = await request.fold<List<int>>(
@@ -282,12 +382,18 @@ class FileTransferService {
           ..write('OK')
           ..close();
       }
-    } catch (e) {
-      print('Error handling file transfer request: $e');
-      request.response
-        ..statusCode = 500
-        ..write('Error')
-        ..close();
+    } catch (e, stackTrace) {
+      print('ERROR handling file transfer request: $e');
+      print('Stack trace: $stackTrace');
+      print('Request method: ${request.method}, path: ${request.uri.path}');
+      try {
+        request.response
+          ..statusCode = 500
+          ..write('Error: $e')
+          ..close();
+      } catch (responseError) {
+        print('Failed to send error response: $responseError');
+      }
     }
   }
 
@@ -384,7 +490,7 @@ class FileTransferService {
             port: port,
             path: '/request',
           );
-          print('Trying to send request to: $uri');
+          if (_verbose) print('Trying to send request to: $uri');
 
           final response = await client
               .post(
@@ -392,7 +498,9 @@ class FileTransferService {
                 headers: {'Content-Type': 'application/json'},
                 body: jsonEncode(transferRequest.toJson()),
               )
-              .timeout(const Duration(seconds: 2));
+              .timeout(
+                const Duration(seconds: 3),
+              ); // Increased timeout slightly
 
           if (response.statusCode == 200) {
             print('Successfully sent file transfer request to port $port');
@@ -403,14 +511,14 @@ class FileTransferService {
             );
             sent = true;
             break;
-          } else {
+          } else if (_verbose) {
             print(
               'Got non-200 response from port $port: ${response.statusCode}',
             );
           }
         } catch (e) {
           lastError = e as Exception;
-          print('Failed to send to port $port: $e');
+          if (_verbose) print('Failed to send to port $port: $e');
           continue;
         } finally {
           client.close();
@@ -418,8 +526,8 @@ class FileTransferService {
       }
 
       if (!sent) {
-        print('Failed to send file transfer request to any port');
-        if (lastError != null) {
+        print('Failed to send file transfer request to target device');
+        if (lastError != null && _verbose) {
           print('Last error: $lastError');
         }
         _pendingRequests.remove(requestId);
