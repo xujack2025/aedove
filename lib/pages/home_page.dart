@@ -305,9 +305,6 @@ class _HomePageState extends State<HomePage>
 
   Future<void> _startDeviceDiscovery() async {
     try {
-      // Wait for permissions before starting discovery
-      await _requestPermissions();
-
       // Start device discovery service
       // Wait for permissions before starting discovery
       await _requestPermissions();

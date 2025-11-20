@@ -2,13 +2,24 @@ package com.app.aedove
 
 import android.content.Context
 import android.net.wifi.WifiManager
+import android.os.Build
+import android.os.Bundle
 import android.os.PowerManager
+import androidx.core.view.WindowCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 
 class MainActivity : FlutterActivity() {
     private var multicastLock: WifiManager.MulticastLock? = null
     private var wakeLock: PowerManager.WakeLock? = null
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        // Enable edge-to-edge for Android 15+ compatibility
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+            WindowCompat.setDecorFitsSystemWindows(window, false)
+        }
+        super.onCreate(savedInstanceState)
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)

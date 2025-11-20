@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 // import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:aedove/pages/home_page.dart';
 import 'package:aedove/services/background_service.dart';
@@ -6,6 +7,20 @@ import 'package:aedove/services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Configure system UI for edge-to-edge on Android 15+
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+
+  // Make system bars transparent for edge-to-edge
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.dark,
+      systemNavigationBarColor: Colors.transparent,
+      systemNavigationBarIconBrightness: Brightness.dark,
+    ),
+  );
+
   runApp(const CPSShareApp());
 }
 

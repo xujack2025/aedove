@@ -488,10 +488,13 @@ class DeviceDiscoveryService {
       _udpSocket?.close();
       _udpSocket = null;
 
-      // Create new socket
+      // Create new socket without reusePort to avoid Android compatibility issues
       _udpSocket = await RawDatagramSocket.bind(
         InternetAddress.anyIPv4,
         _udpPort,
+        reuseAddress:
+            true, // Use reuseAddress instead of reusePort for better compatibility
+        reusePort: false, // Explicitly disable reusePort on Android
       );
       _udpSocket!.broadcastEnabled = true;
 
@@ -503,16 +506,28 @@ class DeviceDiscoveryService {
           }
         },
         onError: (e) {
+          // Suppress reusePort warnings as they're not critical
+          if (e.toString().contains('reusePort')) {
+            return; // Ignore this specific error
+          }
           print('UDP socket error: $e');
           // Don't reconnect immediately on every error to avoid loop
           // Only reconnect if socket is actually broken
-          if (e.toString().contains('Closed') || 
+          if (e.toString().contains('Closed') ||
               e.toString().contains('Bad file descriptor')) {
+            try {
+              _udpSocket?.close();
+            } catch (_) {}
+            _udpSocket = null;
             _scheduleReconnect();
           }
         },
         onDone: () {
           print('UDP socket closed unexpectedly');
+          try {
+            _udpSocket?.close();
+          } catch (_) {}
+          _udpSocket = null;
           _scheduleReconnect();
         },
         cancelOnError: false, // Keep listening even after errors

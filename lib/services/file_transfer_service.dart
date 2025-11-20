@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'dart:convert';
 import 'dart:async';
-import 'dart:developer' as dev;
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:aedove/services/notification_service.dart';
@@ -55,6 +54,7 @@ class FileTransferRequest {
 class FileTransferService {
   static const List<int> _fileTransferPorts = [8081, 8082, 8083, 8084, 8085];
   static int _currentPort = _fileTransferPorts[0];
+  static const bool _verbose = false; // Set to true to enable detailed logging
 
   /// Get the primary port used for file transfers
   static int getPrimaryPort() => _fileTransferPorts[0];
@@ -244,7 +244,9 @@ class FileTransferService {
                     headers: {
                       'Content-Type': 'application/octet-stream',
                       'request_id': requestId,
-                      'file_name': transferRequest.fileName,
+                      'file_name': Uri.encodeComponent(
+                        transferRequest.fileName,
+                      ),
                     },
                     body: bytes,
                   );
@@ -282,8 +284,9 @@ class FileTransferService {
         // Receiver: accept raw file bytes from sender
         try {
           final requestId = request.headers.value('request_id') ?? '';
-          final fileName =
+          final encodedFileName =
               request.headers.value('file_name') ?? 'received_file';
+          final fileName = Uri.decodeComponent(encodedFileName);
 
           // Collect all bytes from the request
           final bytes = await request.fold<List<int>>(
@@ -462,7 +465,7 @@ class FileTransferService {
             port: port,
             path: '/request',
           );
-          print('Trying to send request to: $uri');
+          if (_verbose) print('Trying to send request to: $uri');
 
           final response = await client
               .post(
@@ -470,7 +473,9 @@ class FileTransferService {
                 headers: {'Content-Type': 'application/json'},
                 body: jsonEncode(transferRequest.toJson()),
               )
-              .timeout(const Duration(seconds: 2));
+              .timeout(
+                const Duration(seconds: 3),
+              ); // Increased timeout slightly
 
           if (response.statusCode == 200) {
             print('Successfully sent file transfer request to port $port');
@@ -481,14 +486,14 @@ class FileTransferService {
             );
             sent = true;
             break;
-          } else {
+          } else if (_verbose) {
             print(
               'Got non-200 response from port $port: ${response.statusCode}',
             );
           }
         } catch (e) {
           lastError = e as Exception;
-          print('Failed to send to port $port: $e');
+          if (_verbose) print('Failed to send to port $port: $e');
           continue;
         } finally {
           client.close();
@@ -496,8 +501,8 @@ class FileTransferService {
       }
 
       if (!sent) {
-        print('Failed to send file transfer request to any port');
-        if (lastError != null) {
+        print('Failed to send file transfer request to target device');
+        if (lastError != null && _verbose) {
           print('Last error: $lastError');
         }
         _pendingRequests.remove(requestId);
