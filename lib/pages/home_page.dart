@@ -196,6 +196,7 @@ class _HomePageState extends State<HomePage>
     });
   }
 
+  // ignore: unused_element
   Future<void> _launchUrl(Uri url) async {
     try {
       await launchUrl((url), mode: LaunchMode.externalApplication);
