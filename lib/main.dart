@@ -21,17 +21,17 @@ void main() async {
     ),
   );
 
-  runApp(const CPSShareApp());
+  runApp(const AeDoveApp());
 }
 
-class CPSShareApp extends StatefulWidget {
-  const CPSShareApp({super.key});
+class AeDoveApp extends StatefulWidget {
+  const AeDoveApp({super.key});
 
   @override
-  State<CPSShareApp> createState() => _CPSShareAppState();
+  State<AeDoveApp> createState() => _AeDoveAppState();
 }
 
-class _CPSShareAppState extends State<CPSShareApp> {
+class _AeDoveAppState extends State<AeDoveApp> {
   @override
   void initState() {
     super.initState();

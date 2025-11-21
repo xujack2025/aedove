@@ -457,7 +457,7 @@ class _SendTabState extends State<SendTab> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Make sure other devices are connected to the same WiFi network and have CPS Share running',
+                        'Make sure other devices are connected to the same WiFi network and have AeDove running',
                         style: Theme.of(context).textTheme.bodyMedium,
                         textAlign: TextAlign.center,
                       ),
