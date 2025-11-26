@@ -361,19 +361,47 @@ class _SendTabState extends State<SendTab> {
                       ),
                       const SizedBox(height: 8),
                       SizedBox(
-                        height: 150,
+                        height: 120,
                         child: ListView.builder(
+                          scrollDirection: Axis.horizontal,
                           itemCount: _selectedFiles.length,
                           itemBuilder: (context, index) {
                             final file = _selectedFiles[index];
-                            return ListTile(
-                              leading: const Icon(Icons.insert_drive_file),
-                              title: Text(
-                                p.basename(file.path),
-                                overflow: TextOverflow.ellipsis,
+                            return Container(
+                              width: 100,
+                              margin: const EdgeInsets.only(right: 12),
+                              decoration: BoxDecoration(
+                                border: Border.all(
+                                  color: Colors.grey.withOpacity(0.2),
+                                ),
+                                borderRadius: BorderRadius.circular(8),
                               ),
-                              subtitle: Text(
-                                '${(file.lengthSync() / 1024 / 1024).toStringAsFixed(2)} MB',
+                              padding: const EdgeInsets.all(8),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(
+                                    Icons.insert_drive_file,
+                                    size: 32,
+                                    color: Colors.blue,
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    p.basename(file.path),
+                                    overflow: TextOverflow.ellipsis,
+                                    textAlign: TextAlign.center,
+                                    maxLines: 2,
+                                    style: const TextStyle(fontSize: 12),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    '${(file.lengthSync() / 1024 / 1024).toStringAsFixed(2)} MB',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: Colors.grey[600],
+                                    ),
+                                  ),
+                                ],
                               ),
                             );
                           },
@@ -398,46 +426,43 @@ class _SendTabState extends State<SendTab> {
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 8),
-                    SizedBox(
-                      height: 400,
-                      child: ListView.builder(
-                        itemCount: _discoveredDevices.length,
-                        itemBuilder: (context, index) {
-                          final device = _discoveredDevices[index];
-                          return Card(
-                            child: ListTile(
-                              leading: const Icon(Icons.devices),
-                              title: Text(device.name),
-                              subtitle: Text('${device.ip}:${device.port}'),
-                              trailing: _selectedFiles.isNotEmpty
-                                  ? ElevatedButton.icon(
-                                      onPressed:
-                                          (_sendingByDeviceId[device.id] ??
-                                              false)
-                                          ? null
-                                          : () => _sendFilesToDevice(device),
-                                      icon:
-                                          (_sendingByDeviceId[device.id] ??
-                                              false)
-                                          ? const SizedBox(
-                                              width: 16,
-                                              height: 16,
-                                              child: CircularProgressIndicator(
-                                                strokeWidth: 2,
-                                              ),
-                                            )
-                                          : const Icon(Icons.send),
-                                      label: Text(
+                    ListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: _discoveredDevices.length,
+                      itemBuilder: (context, index) {
+                        final device = _discoveredDevices[index];
+                        return Card(
+                          child: ListTile(
+                            leading: const Icon(Icons.devices),
+                            title: Text(device.name),
+                            subtitle: Text('${device.ip}:${device.port}'),
+                            trailing: _selectedFiles.isNotEmpty
+                                ? ElevatedButton.icon(
+                                    onPressed:
                                         (_sendingByDeviceId[device.id] ?? false)
-                                            ? 'Sending...'
-                                            : 'Send',
-                                      ),
-                                    )
-                                  : const Icon(Icons.wifi, color: Colors.green),
-                            ),
-                          );
-                        },
-                      ),
+                                        ? null
+                                        : () => _sendFilesToDevice(device),
+                                    icon:
+                                        (_sendingByDeviceId[device.id] ?? false)
+                                        ? const SizedBox(
+                                            width: 16,
+                                            height: 16,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                            ),
+                                          )
+                                        : const Icon(Icons.send),
+                                    label: Text(
+                                      (_sendingByDeviceId[device.id] ?? false)
+                                          ? 'Sending...'
+                                          : 'Send',
+                                    ),
+                                  )
+                                : const Icon(Icons.wifi, color: Colors.green),
+                          ),
+                        );
+                      },
                     ),
                   ],
                 ),
@@ -457,7 +482,7 @@ class _SendTabState extends State<SendTab> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Make sure other devices are connected to the same WiFi network and have AeDove running',
+                        'Make sure other devices are connected to the same WiFi network and have Aedove running',
                         style: Theme.of(context).textTheme.bodyMedium,
                         textAlign: TextAlign.center,
                       ),

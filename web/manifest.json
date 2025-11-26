@@ -1,11 +1,11 @@
 {
-    "name": "AeDove",
-    "short_name": "AeDove",
+    "name": "Aedove",
+    "short_name": "Aedove",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#ffffff",
     "theme_color": "#0175C2",
-    "description": "AeDove - Cross-platform file sharing.",
+    "description": "Aedove - Cross-platform file sharing.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

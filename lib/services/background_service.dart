@@ -39,7 +39,7 @@ class BackgroundService {
         final iosInfo = await deviceInfo.iosInfo;
         deviceName = iosInfo.name;
       } else {
-        deviceName = 'AeDove Device';
+        deviceName = 'Aedove Device';
       }
       await prefs.setString(_deviceNameKey, deviceName);
     }

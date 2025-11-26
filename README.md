@@ -1,8 +1,8 @@
-# AeDove
+# Aedove
 
 Cross‑platform, local‑network file sharing app built with Flutter.
 
-AeDove lets you quickly send and receive files between devices on the same network — Android, iOS, macOS, Windows, Linux, and Web (Chrome). It supports selecting any files as well as picking media from the device gallery where supported.
+Aedove lets you quickly send and receive files between devices on the same network — Android, iOS, macOS, Windows, Linux, and Web (Chrome). It supports selecting any files as well as picking media from the device gallery where supported.
 
 ## Key features
 

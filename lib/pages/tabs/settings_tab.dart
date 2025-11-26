@@ -184,8 +184,11 @@ class _SettingsTabState extends State<SettingsTab> {
                         'Show notifications for file transfers',
                       ),
                       value: _notificationsEnabled,
-                      onChanged: (value) {
-                        _saveSetting('notifications_enabled', value);
+                      onChanged: (value) async {
+                        await _saveSetting('notifications_enabled', value);
+                        setState(() {
+                          _notificationsEnabled = value;
+                        });
                       },
                     ),
                     // SwitchListTile(
@@ -220,7 +223,7 @@ class _SettingsTabState extends State<SettingsTab> {
                     const ListTile(
                       leading: Icon(Icons.info),
                       title: Text('Version'),
-                      subtitle: Text('1.0.0'),
+                      subtitle: Text('1.0.3'),
                     ),
                     const ListTile(
                       leading: Icon(Icons.description),

@@ -918,14 +918,35 @@ class DeviceDiscoveryService {
     String deviceId = prefs.getString('device_id') ?? const Uuid().v4();
     await prefs.setString('device_id', deviceId);
 
-    String deviceName = prefs.getString('device_name') ?? 'AeDove Device';
+    // Check if user has set a custom device name
+    String? customDeviceName = prefs.getString('device_name');
+    String deviceName;
 
-    if (Platform.isAndroid) {
-      final androidInfo = await deviceInfo.androidInfo;
-      deviceName = androidInfo.model;
-    } else if (Platform.isIOS) {
-      final iosInfo = await deviceInfo.iosInfo;
-      deviceName = iosInfo.name;
+    if (customDeviceName != null && customDeviceName.isNotEmpty) {
+      // Use custom device name set by user
+      deviceName = customDeviceName;
+    } else {
+      // Use default device name based on platform + IP
+      String defaultName = 'Aedove Device';
+
+      if (Platform.isAndroid) {
+        final androidInfo = await deviceInfo.androidInfo;
+        defaultName = androidInfo.model;
+      } else if (Platform.isIOS) {
+        final iosInfo = await deviceInfo.iosInfo;
+        defaultName = iosInfo.name;
+      } else if (Platform.isWindows) {
+        final windowsInfo = await deviceInfo.windowsInfo;
+        defaultName = windowsInfo.computerName;
+      } else if (Platform.isMacOS) {
+        final macInfo = await deviceInfo.macOsInfo;
+        defaultName = macInfo.computerName;
+      } else if (Platform.isLinux) {
+        final linuxInfo = await deviceInfo.linuxInfo;
+        defaultName = linuxInfo.prettyName ?? 'Linux Device';
+      }
+
+      deviceName = defaultName;
     }
 
     String ipAddress;

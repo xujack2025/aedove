@@ -56,11 +56,13 @@ class _HomePageState extends State<HomePage>
   InAppWebViewController? _adWebViewController;
 
   // ========================= ADS =========================
+  // DEV MODE: Set to false to disable ads during development
+  static const bool _enableAds = false;
+
   // ignore: unused_field
   bool _isExpanded = true;
-  bool _naviPlayVisibility = true;
+  bool _naviPlayVisibility = _enableAds;
   bool _popupAlive = true;
-  bool _loginStop = false;
   Timer? _visibleTimer;
   Timer? _hiddenTimer;
 
@@ -89,19 +91,25 @@ class _HomePageState extends State<HomePage>
   }
 
   void _toggleNaviPlay() {
-    if (!_loginStop) {
-      setState(() {
-        _naviPlayVisibility = false;
-        _popupAlive = !_popupAlive;
-        if (_popupAlive == true) {
-          _isExpanded = true;
-          _naviPlayVisibility = true;
-        }
-      });
-    }
+    setState(() {
+      _naviPlayVisibility = false;
+      _popupAlive = !_popupAlive;
+      if (_popupAlive == true) {
+        _isExpanded = true;
+        _naviPlayVisibility = true;
+      }
+    });
   }
 
   Future<void> _fetchLink_Duration() async {
+    // Skip ads if disabled in dev mode
+    if (!_enableAds) {
+      setState(() {
+        _navistatus = false;
+      });
+      return;
+    }
+
     try {
       final responseData = await http.get(Uri.parse(_durationAPILink));
       if (responseData.statusCode == 200) {
@@ -157,10 +165,8 @@ class _HomePageState extends State<HomePage>
     print("Showing: $timerDuration");
     _hiddenTimer?.cancel();
     _visibleTimer = Timer.periodic(Duration(seconds: timerDuration), (timer) {
-      if (!_loginStop) {
-        _toggleNaviPlay();
-        _hiddenADTimer(hidetimerDuration);
-      }
+      _toggleNaviPlay();
+      _hiddenADTimer(hidetimerDuration);
     });
   }
 
@@ -171,17 +177,15 @@ class _HomePageState extends State<HomePage>
     _hiddenTimer = Timer.periodic(Duration(seconds: hidetimerDuration), (
       timer,
     ) {
-      if (!_loginStop) {
-        _toggleNaviPlay();
-        adLinksIndex++;
-        if (adLinksIndex == adLinkDurationData.length) {
-          _fetchLink_Duration();
-          adLinksIndex = 0;
-        } else {
-          _linkChanger();
-        }
-        _hiddenTimer?.cancel();
+      _toggleNaviPlay();
+      adLinksIndex++;
+      if (adLinksIndex == adLinkDurationData.length) {
+        _fetchLink_Duration();
+        adLinksIndex = 0;
+      } else {
+        _linkChanger();
       }
+      _hiddenTimer?.cancel();
     });
   }
 
@@ -343,7 +347,7 @@ class _HomePageState extends State<HomePage>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('AeDove'),
+        title: const Text('Aedove'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         centerTitle: true,
         actions: [

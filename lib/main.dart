@@ -50,7 +50,7 @@ class _AeDoveAppState extends State<AeDoveApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'AeDove',
+      title: 'Aedove',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),

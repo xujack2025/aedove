@@ -196,6 +196,21 @@ class FileTransferService {
         transferRequest.ipAddress = remoteAddress;
         transferRequest.targetDeviceIP = remoteAddress;
 
+        // Don't add to pending if it's from our own device (sender)
+        final myDeviceId = await _getDeviceId();
+        print(
+          'Comparing sender ID: ${transferRequest.senderId} with my ID: $myDeviceId',
+        );
+        if (transferRequest.senderId == myDeviceId) {
+          print('Ignoring file transfer request from own device');
+          request.response
+            ..statusCode = 200
+            ..write('OK')
+            ..close();
+          return;
+        }
+        print('Request is from different device, adding to pending list');
+
         _pendingRequests[transferRequest.id] = transferRequest;
         _requestsController.add(_pendingRequests.values.toList());
         print('Transfer request added to pending list');
@@ -351,7 +366,9 @@ class FileTransferService {
         final data = jsonDecode(body);
         final requestId = data['request_id'];
 
+        // Clean up both pending requests and outgoing files
         _pendingRequests.remove(requestId);
+        _outgoingFiles.remove(requestId);
         _requestsController.add(_pendingRequests.values.toList());
 
         request.response
@@ -373,40 +390,6 @@ class FileTransferService {
       }
     }
   }
-
-  /*static Future<void> _processFileTransfer(FileTransferRequest request) async {
-    try {
-      String filePath;
-      if (Platform.isIOS) {
-        // Get the iOS documents directory
-        final documentsDir = await getApplicationDocumentsDirectory();
-        filePath = '${documentsDir.path}/${request.fileName}';
-      } else {
-        // Android downloads directory
-        final downloadDir = Directory('/storage/emulated/0/Download');
-        if (!await downloadDir.exists()) {
-          await downloadDir.create(recursive: true);
-        }
-        filePath = '${downloadDir.path}/${request.fileName}';
-      }
-
-      final file = File(filePath);
-
-      // Save the file (implement actual file transfer here)
-      // For now, we'll just simulate file creation
-      await file.writeAsString(''); // Placeholder for actual file transfer
-
-      // Show notification with the file location
-      await NotificationService.showFileReceivedNotification(
-        fileName: request.fileName,
-        fileSize: _formatFileSize(request.fileSize),
-        filePath: filePath,
-        isIOS: Platform.isIOS,
-      );
-    } catch (e) {
-      print('Error processing file transfer: $e');
-    }
-  }*/
 
   static Future<void> sendFile({
     required String targetDeviceId,
@@ -441,10 +424,9 @@ class FileTransferService {
       transferRequest.localFilePath = filePath;
 
       // Keep track of outgoing file so we can send bytes if the receiver accepts
-      transferRequest.localFilePath = filePath;
+      // Note: We do NOT add outgoing requests to _pendingRequests
+      // Only incoming requests from other devices should appear there
       _outgoingFiles[requestId] = filePath;
-      _pendingRequests[requestId] = transferRequest;
-      _requestsController.add(_pendingRequests.values.toList());
 
       // Try to send request to target device on all available ports
       bool sent = false;
@@ -542,7 +524,7 @@ class FileTransferService {
             break;
           }
         } catch (e) {
-          lastError = e as Exception;
+          lastError = Exception(e.toString());
           print('Failed to send accept to port $port: $e');
           continue;
         } finally {
@@ -556,6 +538,8 @@ class FileTransferService {
           print('Last error: $lastError');
         }
       }
+
+      // Note: Don't remove from pending here - will be removed when file is received in /transfer endpoint
     } catch (e) {
       print('Error accepting file transfer: $e');
     }
@@ -587,7 +571,7 @@ class FileTransferService {
             break;
           }
         } catch (e) {
-          lastError = e as Exception;
+          lastError = Exception(e.toString());
           print('Failed to send deny to port $port: $e');
           continue;
         } finally {
@@ -601,6 +585,10 @@ class FileTransferService {
           print('Last error: $lastError');
         }
       }
+
+      // Always remove from local pending requests (receiver side cleanup)
+      _pendingRequests.remove(requestId);
+      _requestsController.add(_pendingRequests.values.toList());
     } catch (e) {
       print('Error denying file transfer: $e');
     }
@@ -649,6 +637,6 @@ class FileTransferService {
 
   static Future<String> _getDeviceName() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('device_name') ?? 'AeDove Device';
+    return prefs.getString('device_name') ?? 'Aedove Device';
   }
 }
