@@ -54,7 +54,7 @@ class DeviceDiscoveryService {
   static const int _broadcastInterval = 30; // seconds
   static const Duration _cleanupThreshold = Duration(minutes: 5);
   static const Duration _reconnectDelay = Duration(seconds: 5);
-  static bool _verbose = false; // set to true to enable detailed logs
+  static final bool _verbose = false; // set to true to enable detailed logs
 
   static BonsoirBroadcast? _broadcast;
   static BonsoirDiscovery? _discovery;
@@ -943,7 +943,7 @@ class DeviceDiscoveryService {
         defaultName = macInfo.computerName;
       } else if (Platform.isLinux) {
         final linuxInfo = await deviceInfo.linuxInfo;
-        defaultName = linuxInfo.prettyName ?? 'Linux Device';
+        defaultName = linuxInfo.prettyName;
       }
 
       deviceName = defaultName;

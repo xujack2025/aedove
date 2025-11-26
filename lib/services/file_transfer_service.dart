@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:aedove/services/notification_service.dart';
 import 'package:aedove/services/media_store_service.dart';
+import 'package:path/path.dart' as p;
 
 class FileTransferRequest {
   final String id;
@@ -241,43 +242,67 @@ class FileTransferService {
         final data = jsonDecode(body);
         final requestId = data['request_id'];
 
-        if (_pendingRequests.containsKey(requestId)) {
-          final transferRequest = _pendingRequests[requestId]!;
+        // Check if we have this outgoing file to send
+        if (_outgoingFiles.containsKey(requestId)) {
           final remoteAddress = request.connectionInfo?.remoteAddress.address;
           if (remoteAddress != null) {
-            final localPath =
-                _outgoingFiles[requestId] ?? transferRequest.localFilePath;
+            final localPath = _outgoingFiles[requestId];
             if (localPath != null) {
               try {
                 final file = File(localPath);
                 if (await file.exists()) {
                   final bytes = await file.readAsBytes();
-                  final client = http.Client();
-                  final uri = Uri.parse(
-                    'http://$remoteAddress:$_currentPort/transfer',
-                  );
-                  final resp = await client.post(
-                    uri,
-                    headers: {
-                      'Content-Type': 'application/octet-stream',
-                      'request_id': requestId,
-                      'file_name': Uri.encodeComponent(
-                        transferRequest.fileName,
-                      ),
-                    },
-                    body: bytes,
-                  );
-                  client.close();
+                  bool sent = false;
 
-                  if (resp.statusCode == 200) {
-                    // Clean up pending/outgoing entries
-                    _outgoingFiles.remove(requestId);
-                    _pendingRequests.remove(requestId);
-                    _requestsController.add(_pendingRequests.values.toList());
-                  } else {
-                    print(
-                      'Failed to push file to receiver: ${resp.statusCode}',
-                    );
+                  // Try all available ports to send file to receiver
+                  for (final port in _fileTransferPorts) {
+                    final client = http.Client();
+                    try {
+                      print('Trying to send file to receiver on port $port');
+                      final uri = Uri.parse(
+                        'http://$remoteAddress:$port/transfer',
+                      );
+                      final resp = await client
+                          .post(
+                            uri,
+                            headers: {
+                              'Content-Type': 'application/octet-stream',
+                              'request_id': requestId,
+                              'file_name': Uri.encodeComponent(
+                                p.basename(localPath),
+                              ),
+                            },
+                            body: bytes,
+                          )
+                          .timeout(const Duration(seconds: 5));
+                      client.close();
+
+                      if (resp.statusCode == 200) {
+                        print(
+                          'Successfully sent file to receiver on port $port',
+                        );
+                        // Clean up pending/outgoing entries
+                        _outgoingFiles.remove(requestId);
+                        _pendingRequests.remove(requestId);
+                        _requestsController.add(
+                          _pendingRequests.values.toList(),
+                        );
+                        sent = true;
+                        break;
+                      } else {
+                        print(
+                          'Failed to push file on port $port: ${resp.statusCode}',
+                        );
+                      }
+                    } catch (e) {
+                      print('Error sending to port $port: $e');
+                      client.close();
+                      continue;
+                    }
+                  }
+
+                  if (!sent) {
+                    print('Failed to send file to receiver on any port');
                   }
                 } else {
                   print('Local file not found to send: $localPath');
@@ -549,6 +574,16 @@ class FileTransferService {
     try {
       final request = _pendingRequests[requestId];
       if (request == null) return;
+
+      // If ipAddress is empty, this is likely our own outgoing request
+      // Just remove it locally without trying to send deny to sender
+      if (request.ipAddress.isEmpty) {
+        print('Denying local/outgoing request (no remote IP)');
+        _pendingRequests.remove(requestId);
+        _outgoingFiles.remove(requestId);
+        _requestsController.add(_pendingRequests.values.toList());
+        return;
+      }
 
       bool denied = false;
       Exception? lastError;
