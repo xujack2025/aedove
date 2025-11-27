@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -23,7 +24,9 @@ class MediaStoreService {
           return result;
         }
       } catch (e) {
-        print('Failed to save to gallery, falling back to regular storage: $e');
+        debugPrint(
+          'Failed to save to gallery, falling back to regular storage: $e',
+        );
       }
     }
 
@@ -72,7 +75,7 @@ class MediaStoreService {
 
       return 'Saved to gallery: $fileName';
     } catch (e) {
-      print('Error saving to gallery: $e');
+      debugPrint('Error saving to gallery: $e');
       return null;
     }
   }
@@ -87,7 +90,7 @@ class MediaStoreService {
       await file.writeAsBytes(bytes);
       return filePath;
     } catch (e) {
-      print('Error saving file on iOS: $e');
+      debugPrint('Error saving file on iOS: $e');
       throw Exception('Failed to save file: $e');
     }
   }
@@ -106,7 +109,7 @@ class MediaStoreService {
       await file.writeAsBytes(bytes);
       return filePath;
     } catch (e) {
-      print('Error saving file on macOS: $e');
+      debugPrint('Error saving file on macOS: $e');
       throw Exception('Failed to save file: $e');
     }
   }
@@ -139,13 +142,13 @@ class MediaStoreService {
         final uniqueFile = File(uniqueFilePath);
 
         await uniqueFile.writeAsBytes(bytes);
-        print(
+        debugPrint(
           'File saved successfully to app-specific storage: $uniqueFilePath',
         );
         return uniqueFilePath;
       }
     } catch (e) {
-      print('Error saving to app-specific external storage: $e');
+      debugPrint('Error saving to app-specific external storage: $e');
     }
 
     // Fallback: save to app internal storage (always works, no permission needed)
@@ -164,10 +167,10 @@ class MediaStoreService {
 
     try {
       await file.writeAsBytes(bytes);
-      print('File saved to app storage at: $uniqueFilePath');
+      debugPrint('File saved to app storage at: $uniqueFilePath');
       return uniqueFilePath;
     } catch (e) {
-      print('Error saving to app storage: $e');
+      debugPrint('Error saving to app storage: $e');
       throw Exception('Failed to save file: $e');
     }
   }
@@ -187,7 +190,7 @@ class MediaStoreService {
           return true;
         }
       } catch (e) {
-        print('Media permissions not available: $e');
+        debugPrint('Media permissions not available: $e');
       }
 
       // Try legacy storage permission (Android 10-12)
@@ -199,7 +202,7 @@ class MediaStoreService {
         }
         return status.isGranted || status.isLimited;
       } catch (e) {
-        print('Storage permission check failed: $e');
+        debugPrint('Storage permission check failed: $e');
       }
     }
     // Return true to allow fallback to app-specific storage

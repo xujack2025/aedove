@@ -1,10 +1,12 @@
 import 'dart:io';
 import 'dart:convert';
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:aedove/services/notification_service.dart';
 import 'package:aedove/services/media_store_service.dart';
+import 'package:path/path.dart' as p;
 
 class FileTransferRequest {
   final String id;
@@ -81,7 +83,7 @@ class FileTransferService {
   /// Check if the file transfer server is running
   static bool isServerRunning() {
     final running = _server != null;
-    print(
+    debugPrint(
       'File transfer server status: ${running ? "RUNNING on port $_currentPort" : "NOT RUNNING"}',
     );
     return running;
@@ -113,23 +115,25 @@ class FileTransferService {
     _healthCheckTimer?.cancel();
     _healthCheckTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       if (_server == null) {
-        print('⚠️ File transfer server is down! Attempting to restart...');
+        debugPrint('⚠️ File transfer server is down! Attempting to restart...');
         _startFileTransferServer().catchError((e) {
-          print('Failed to restart server: $e');
+          debugPrint('Failed to restart server: $e');
         });
       } else {
-        print('✓ File transfer server health check OK (port: $_currentPort)');
+        debugPrint(
+          '✓ File transfer server health check OK (port: $_currentPort)',
+        );
       }
     });
   }
 
   static Future<void> _startFileTransferServer() async {
-    print('Starting file transfer server...');
-    print('Attempting to bind to ports: $_fileTransferPorts');
+    debugPrint('Starting file transfer server...');
+    debugPrint('Attempting to bind to ports: $_fileTransferPorts');
 
     for (final port in _fileTransferPorts) {
       try {
-        print('Trying to bind to port $port...');
+        debugPrint('Trying to bind to port $port...');
         _server = await HttpServer.bind(InternetAddress.anyIPv4, port);
         _currentPort = port;
         _server!.listen(
@@ -137,23 +141,23 @@ class FileTransferService {
             _handleFileTransferRequest(request);
           },
           onError: (error) {
-            print('Server error on port $_currentPort: $error');
+            debugPrint('Server error on port $_currentPort: $error');
           },
         );
-        print(
+        debugPrint(
           '✓ Successfully bound file transfer server to port $_currentPort',
         );
-        print('Server listening on 0.0.0.0:$_currentPort');
+        debugPrint('Server listening on 0.0.0.0:$_currentPort');
         return;
       } catch (e, stackTrace) {
-        print('✗ Failed to bind file transfer server to port $port');
-        print('Error: $e');
+        debugPrint('✗ Failed to bind file transfer server to port $port');
+        debugPrint('Error: $e');
         if (e.toString().contains('Address already in use') ||
             e.toString().contains('bind failed')) {
-          print('Port $port is already in use, trying next port...');
+          debugPrint('Port $port is already in use, trying next port...');
         } else {
-          print('Unexpected error: $e');
-          print('Stack trace: $stackTrace');
+          debugPrint('Unexpected error: $e');
+          debugPrint('Stack trace: $stackTrace');
         }
         continue;
       }
@@ -167,38 +171,53 @@ class FileTransferService {
         '2) Firewall/security settings blocking ports, '
         '3) Device-specific network restrictions. '
         'Please restart the app or check device settings.';
-    print('ERROR: $errorMsg');
+    debugPrint('ERROR: $errorMsg');
     throw Exception(errorMsg);
   }
 
   static Future<void> _handleFileTransferRequest(HttpRequest request) async {
-    print('Received ${request.method} request to ${request.uri.path}');
+    debugPrint('Received ${request.method} request to ${request.uri.path}');
     try {
       final remoteAddress = request.connectionInfo?.remoteAddress.address;
       if (remoteAddress == null || remoteAddress.isEmpty) {
-        print('Error: No remote address available');
+        debugPrint('Error: No remote address available');
         request.response
           ..statusCode = 400
           ..write('No remote address')
           ..close();
         return;
       }
-      print('Remote address: $remoteAddress');
+      debugPrint('Remote address: $remoteAddress');
 
       if (request.method == 'POST' && request.uri.path == '/request') {
         // Handle file transfer request
-        print('Handling file transfer request...');
+        debugPrint('Handling file transfer request...');
         final body = await utf8.decodeStream(request);
-        print('Request body received: ${body.length} bytes');
+        debugPrint('Request body received: ${body.length} bytes');
         final requestData = jsonDecode(body);
-        print('Request data parsed: $requestData');
+        debugPrint('Request data parsed: $requestData');
         final transferRequest = FileTransferRequest.fromJson(requestData);
         transferRequest.ipAddress = remoteAddress;
         transferRequest.targetDeviceIP = remoteAddress;
 
+        // Don't add to pending if it's from our own device (sender)
+        final myDeviceId = await _getDeviceId();
+        debugPrint(
+          'Comparing sender ID: ${transferRequest.senderId} with my ID: $myDeviceId',
+        );
+        if (transferRequest.senderId == myDeviceId) {
+          debugPrint('Ignoring file transfer request from own device');
+          request.response
+            ..statusCode = 200
+            ..write('OK')
+            ..close();
+          return;
+        }
+        debugPrint('Request is from different device, adding to pending list');
+
         _pendingRequests[transferRequest.id] = transferRequest;
         _requestsController.add(_pendingRequests.values.toList());
-        print('Transfer request added to pending list');
+        debugPrint('Transfer request added to pending list');
 
         // Show notification
         try {
@@ -207,9 +226,9 @@ class FileTransferService {
             fileName: transferRequest.fileName,
             fileSize: _formatFileSize(transferRequest.fileSize),
           );
-          print('Notification shown successfully');
+          debugPrint('Notification shown successfully');
         } catch (e) {
-          print('Error showing notification: $e');
+          debugPrint('Error showing notification: $e');
           // Don't fail the request if notification fails
         }
 
@@ -217,7 +236,7 @@ class FileTransferService {
           ..statusCode = 200
           ..write('OK')
           ..close();
-        print('Response sent: 200 OK');
+        debugPrint('Response sent: 200 OK');
       } else if (request.method == 'POST' && request.uri.path == '/accept') {
         // Handle file transfer acceptance (sender side receives this when
         // receiver accepted our request). The sender should push file bytes
@@ -226,55 +245,81 @@ class FileTransferService {
         final data = jsonDecode(body);
         final requestId = data['request_id'];
 
-        if (_pendingRequests.containsKey(requestId)) {
-          final transferRequest = _pendingRequests[requestId]!;
+        // Check if we have this outgoing file to send
+        if (_outgoingFiles.containsKey(requestId)) {
           final remoteAddress = request.connectionInfo?.remoteAddress.address;
           if (remoteAddress != null) {
-            final localPath =
-                _outgoingFiles[requestId] ?? transferRequest.localFilePath;
+            final localPath = _outgoingFiles[requestId];
             if (localPath != null) {
               try {
                 final file = File(localPath);
                 if (await file.exists()) {
                   final bytes = await file.readAsBytes();
-                  final client = http.Client();
-                  final uri = Uri.parse(
-                    'http://$remoteAddress:$_currentPort/transfer',
-                  );
-                  final resp = await client.post(
-                    uri,
-                    headers: {
-                      'Content-Type': 'application/octet-stream',
-                      'request_id': requestId,
-                      'file_name': Uri.encodeComponent(
-                        transferRequest.fileName,
-                      ),
-                    },
-                    body: bytes,
-                  );
-                  client.close();
+                  bool sent = false;
 
-                  if (resp.statusCode == 200) {
-                    // Clean up pending/outgoing entries
-                    _outgoingFiles.remove(requestId);
-                    _pendingRequests.remove(requestId);
-                    _requestsController.add(_pendingRequests.values.toList());
-                  } else {
-                    print(
-                      'Failed to push file to receiver: ${resp.statusCode}',
-                    );
+                  // Try all available ports to send file to receiver
+                  for (final port in _fileTransferPorts) {
+                    final client = http.Client();
+                    try {
+                      debugPrint(
+                        'Trying to send file to receiver on port $port',
+                      );
+                      final uri = Uri.parse(
+                        'http://$remoteAddress:$port/transfer',
+                      );
+                      final resp = await client
+                          .post(
+                            uri,
+                            headers: {
+                              'Content-Type': 'application/octet-stream',
+                              'request_id': requestId,
+                              'file_name': Uri.encodeComponent(
+                                p.basename(localPath),
+                              ),
+                            },
+                            body: bytes,
+                          )
+                          .timeout(const Duration(seconds: 5));
+                      client.close();
+
+                      if (resp.statusCode == 200) {
+                        debugPrint(
+                          'Successfully sent file to receiver on port $port',
+                        );
+                        // Clean up pending/outgoing entries
+                        _outgoingFiles.remove(requestId);
+                        _pendingRequests.remove(requestId);
+                        _requestsController.add(
+                          _pendingRequests.values.toList(),
+                        );
+                        sent = true;
+                        break;
+                      } else {
+                        debugPrint(
+                          'Failed to push file on port $port: ${resp.statusCode}',
+                        );
+                      }
+                    } catch (e) {
+                      debugPrint('Error sending to port $port: $e');
+                      client.close();
+                      continue;
+                    }
+                  }
+
+                  if (!sent) {
+                    debugPrint('Failed to send file to receiver on any port');
                   }
                 } else {
-                  print('Local file not found to send: $localPath');
+                  debugPrint('Local file not found to send: $localPath');
                 }
               } catch (e) {
-                print('Error sending file bytes to receiver: $e');
+                debugPrint('Error sending file bytes to receiver: $e');
               }
             } else {
-              print('No local file path found for request $requestId');
+              debugPrint('No local file path found for request $requestId');
             }
           } else {
-            print('No remote address available for /accept request');
+            debugPrint('No remote address available for /accept request');
           }
         }
 
@@ -332,14 +377,14 @@ class FileTransferService {
               ..write('OK')
               ..close();
           } catch (e) {
-            print('Error saving file: $e');
+            debugPrint('Error saving file: $e');
             request.response
               ..statusCode = 500
               ..write('Error saving file: $e')
               ..close();
           }
         } catch (e) {
-          print('Error receiving file transfer: $e');
+          debugPrint('Error receiving file transfer: $e');
           request.response
             ..statusCode = 500
             ..write('Error receiving file: $e')
@@ -351,7 +396,9 @@ class FileTransferService {
         final data = jsonDecode(body);
         final requestId = data['request_id'];
 
+        // Clean up both pending requests and outgoing files
         _pendingRequests.remove(requestId);
+        _outgoingFiles.remove(requestId);
         _requestsController.add(_pendingRequests.values.toList());
 
         request.response
@@ -360,53 +407,21 @@ class FileTransferService {
           ..close();
       }
     } catch (e, stackTrace) {
-      print('ERROR handling file transfer request: $e');
-      print('Stack trace: $stackTrace');
-      print('Request method: ${request.method}, path: ${request.uri.path}');
+      debugPrint('ERROR handling file transfer request: $e');
+      debugPrint('Stack trace: $stackTrace');
+      debugPrint(
+        'Request method: ${request.method}, path: ${request.uri.path}',
+      );
       try {
         request.response
           ..statusCode = 500
           ..write('Error: $e')
           ..close();
       } catch (responseError) {
-        print('Failed to send error response: $responseError');
+        debugPrint('Failed to send error response: $responseError');
       }
     }
   }
-
-  /*static Future<void> _processFileTransfer(FileTransferRequest request) async {
-    try {
-      String filePath;
-      if (Platform.isIOS) {
-        // Get the iOS documents directory
-        final documentsDir = await getApplicationDocumentsDirectory();
-        filePath = '${documentsDir.path}/${request.fileName}';
-      } else {
-        // Android downloads directory
-        final downloadDir = Directory('/storage/emulated/0/Download');
-        if (!await downloadDir.exists()) {
-          await downloadDir.create(recursive: true);
-        }
-        filePath = '${downloadDir.path}/${request.fileName}';
-      }
-
-      final file = File(filePath);
-
-      // Save the file (implement actual file transfer here)
-      // For now, we'll just simulate file creation
-      await file.writeAsString(''); // Placeholder for actual file transfer
-
-      // Show notification with the file location
-      await NotificationService.showFileReceivedNotification(
-        fileName: request.fileName,
-        fileSize: _formatFileSize(request.fileSize),
-        filePath: filePath,
-        isIOS: Platform.isIOS,
-      );
-    } catch (e) {
-      print('Error processing file transfer: $e');
-    }
-  }*/
 
   static Future<void> sendFile({
     required String targetDeviceId,
@@ -441,10 +456,9 @@ class FileTransferService {
       transferRequest.localFilePath = filePath;
 
       // Keep track of outgoing file so we can send bytes if the receiver accepts
-      transferRequest.localFilePath = filePath;
+      // Note: We do NOT add outgoing requests to _pendingRequests
+      // Only incoming requests from other devices should appear there
       _outgoingFiles[requestId] = filePath;
-      _pendingRequests[requestId] = transferRequest;
-      _requestsController.add(_pendingRequests.values.toList());
 
       // Try to send request to target device on all available ports
       bool sent = false;
@@ -467,7 +481,9 @@ class FileTransferService {
             port: port,
             path: '/request',
           );
-          if (_verbose) print('Trying to send request to: $uri');
+          if (_verbose) {
+            debugPrint('Trying to send request to: $uri');
+          }
 
           final response = await client
               .post(
@@ -480,7 +496,7 @@ class FileTransferService {
               ); // Increased timeout slightly
 
           if (response.statusCode == 200) {
-            print('Successfully sent file transfer request to port $port');
+            debugPrint('Successfully sent file transfer request to port $port');
             // Show notification that file was ready to be sent
             await NotificationService.showFileSentNotification(
               fileName: fileName,
@@ -489,13 +505,15 @@ class FileTransferService {
             sent = true;
             break;
           } else if (_verbose) {
-            print(
+            debugPrint(
               'Got non-200 response from port $port: ${response.statusCode}',
             );
           }
         } catch (e) {
           lastError = e as Exception;
-          if (_verbose) print('Failed to send to port $port: $e');
+          if (_verbose) {
+            debugPrint('Failed to send to port $port: $e');
+          }
           continue;
         } finally {
           client.close();
@@ -503,16 +521,16 @@ class FileTransferService {
       }
 
       if (!sent) {
-        print('Failed to send file transfer request to target device');
+        debugPrint('Failed to send file transfer request to target device');
         if (lastError != null && _verbose) {
-          print('Last error: $lastError');
+          debugPrint('Last error: $lastError');
         }
         _pendingRequests.remove(requestId);
         _outgoingFiles.remove(requestId);
         _requestsController.add(_pendingRequests.values.toList());
       }
     } catch (e) {
-      print('Error sending file: $e');
+      debugPrint('Error sending file: $e');
     }
   }
 
@@ -527,7 +545,7 @@ class FileTransferService {
       for (final port in _fileTransferPorts) {
         final client = http.Client();
         try {
-          print('Trying to send accept request to port $port');
+          debugPrint('Trying to send accept request to port $port');
           final response = await client
               .post(
                 Uri.parse('http://${request.ipAddress}:$port/accept'),
@@ -537,13 +555,13 @@ class FileTransferService {
               .timeout(const Duration(seconds: 2));
 
           if (response.statusCode == 200) {
-            print('Successfully sent accept request to port $port');
+            debugPrint('Successfully sent accept request to port $port');
             accepted = true;
             break;
           }
         } catch (e) {
-          lastError = e as Exception;
-          print('Failed to send accept to port $port: $e');
+          lastError = Exception(e.toString());
+          debugPrint('Failed to send accept to port $port: $e');
           continue;
         } finally {
           client.close();
@@ -551,13 +569,15 @@ class FileTransferService {
       }
 
       if (!accepted) {
-        print('Failed to send accept request to any port');
+        debugPrint('Failed to send accept request to any port');
         if (lastError != null) {
-          print('Last error: $lastError');
+          debugPrint('Last error: $lastError');
         }
       }
+
+      // Note: Don't remove from pending here - will be removed when file is received in /transfer endpoint
     } catch (e) {
-      print('Error accepting file transfer: $e');
+      debugPrint('Error accepting file transfer: $e');
     }
   }
 
@@ -566,13 +586,23 @@ class FileTransferService {
       final request = _pendingRequests[requestId];
       if (request == null) return;
 
+      // If ipAddress is empty, this is likely our own outgoing request
+      // Just remove it locally without trying to send deny to sender
+      if (request.ipAddress.isEmpty) {
+        debugPrint('Denying local/outgoing request (no remote IP)');
+        _pendingRequests.remove(requestId);
+        _outgoingFiles.remove(requestId);
+        _requestsController.add(_pendingRequests.values.toList());
+        return;
+      }
+
       bool denied = false;
       Exception? lastError;
 
       for (final port in _fileTransferPorts) {
         final client = http.Client();
         try {
-          print('Trying to send deny request to port $port');
+          debugPrint('Trying to send deny request to port $port');
           final response = await client
               .post(
                 Uri.parse('http://${request.ipAddress}:$port/deny'),
@@ -582,13 +612,13 @@ class FileTransferService {
               .timeout(const Duration(seconds: 2));
 
           if (response.statusCode == 200) {
-            print('Successfully sent deny request to port $port');
+            debugPrint('Successfully sent deny request to port $port');
             denied = true;
             break;
           }
         } catch (e) {
-          lastError = e as Exception;
-          print('Failed to send deny to port $port: $e');
+          lastError = Exception(e.toString());
+          debugPrint('Failed to send deny to port $port: $e');
           continue;
         } finally {
           client.close();
@@ -596,13 +626,17 @@ class FileTransferService {
       }
 
       if (!denied) {
-        print('Failed to send deny request to any port');
+        debugPrint('Failed to send deny request to any port');
         if (lastError != null) {
-          print('Last error: $lastError');
+          debugPrint('Last error: $lastError');
         }
       }
+
+      // Always remove from local pending requests (receiver side cleanup)
+      _pendingRequests.remove(requestId);
+      _requestsController.add(_pendingRequests.values.toList());
     } catch (e) {
-      print('Error denying file transfer: $e');
+      debugPrint('Error denying file transfer: $e');
     }
   }
 
@@ -649,6 +683,6 @@ class FileTransferService {
 
   static Future<String> _getDeviceName() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('device_name') ?? 'AeDove Device';
+    return prefs.getString('device_name') ?? 'Aedove Device';
   }
 }

@@ -99,140 +99,250 @@ class _SettingsTabState extends State<SettingsTab> {
     setState(() {});
   }
 
+  Widget _buildSectionCard({
+    required String title,
+    required List<Widget> children,
+    required IconData icon,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha((0.1 * 255).round()),
+            blurRadius: 20,
+            spreadRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.primary.withAlpha((0.1 * 255).round()),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  icon,
+                  color: Theme.of(context).colorScheme.primary,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                title,
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          ...children,
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(vertical: 0, horizontal: 24.0),
-      child: SingleChildScrollView(
-        child: Column(
-          children: [
-            const SizedBox(height: 8),
-            Icon(
-              Icons.settings,
-              size: 80,
-              color: Theme.of(context).colorScheme.primary,
+      physics: const BouncingScrollPhysics(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const SizedBox(height: 24),
+          Text(
+            'Settings',
+            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: Theme.of(context).colorScheme.onSurface,
             ),
-            const SizedBox(height: 24),
-            Text(
-              'Settings',
-              style: Theme.of(context).textTheme.headlineMedium,
-              textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Manage your device and preferences',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: Theme.of(
+                context,
+              ).colorScheme.onSurface.withAlpha((0.6 * 255).round()),
             ),
-            const SizedBox(height: 32),
+          ),
+          const SizedBox(height: 32),
 
-            // Device Information
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Device Information',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 16),
-                    ListTile(
-                      leading: const Icon(Icons.devices),
-                      title: const Text('Device Name'),
-                      subtitle: Text(_deviceName),
-                      trailing: const Icon(Icons.edit),
-                      onTap: () => _showDeviceNameDialog(),
-                    ),
-                    ListTile(
-                      leading: const Icon(Icons.fingerprint),
-                      title: const Text('Device ID'),
-                      subtitle: Text(_deviceId),
-                    ),
-                    ListTile(
-                      leading: const Icon(Icons.wifi),
-                      title: const Text('IP Address'),
-                      subtitle: Text(_ipAddress),
-                    ),
-                  ],
+          // Device Information
+          _buildSectionCard(
+            title: 'Device Information',
+            icon: Icons.devices_other_rounded,
+            children: [
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withAlpha((0.1 * 255).round()),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.edit_rounded,
+                    color: Colors.blue,
+                    size: 20,
+                  ),
+                ),
+                title: const Text(
+                  'Device Name',
+                  style: TextStyle(fontWeight: FontWeight.w500),
+                ),
+                subtitle: Text(_deviceName),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () => _showDeviceNameDialog(),
+              ),
+              const Divider(height: 24),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.purple.withAlpha((0.1 * 255).round()),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.fingerprint_rounded,
+                    color: Colors.purple,
+                    size: 20,
+                  ),
+                ),
+                title: const Text(
+                  'Device ID',
+                  style: TextStyle(fontWeight: FontWeight.w500),
+                ),
+                subtitle: Text(
+                  _deviceId,
+                  style: const TextStyle(fontFamily: 'monospace'),
                 ),
               ),
-            ),
-
-            const SizedBox(height: 16),
-
-            // File Transfer Settings
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'File Transfer Settings',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 16),
-                    // SwitchListTile(
-                    //   title: const Text('Auto-accept files'),
-                    //   subtitle: const Text(
-                    //     'Automatically accept files from trusted devices',
-                    //   ),
-                    //   value: _autoAcceptFiles,
-                    //   onChanged: (value) {
-                    //     _saveSetting('auto_accept_files', value);
-                    //   },
-                    // ),
-                    SwitchListTile(
-                      title: const Text('Notifications'),
-                      subtitle: const Text(
-                        'Show notifications for file transfers',
-                      ),
-                      value: _notificationsEnabled,
-                      onChanged: (value) {
-                        _saveSetting('notifications_enabled', value);
-                      },
-                    ),
-                    // SwitchListTile(
-                    //   title: const Text('Background Service'),
-                    //   subtitle: const Text(
-                    //     'Keep service running in background',
-                    //   ),
-                    //   value: _backgroundServiceEnabled,
-                    //   onChanged: (value) {
-                    //     _saveSetting('background_service_enabled', value);
-                    //   },
-                    // ),
-                  ],
+              const Divider(height: 24),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withAlpha((0.1 * 255).round()),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.wifi_rounded,
+                    color: Colors.orange,
+                    size: 20,
+                  ),
+                ),
+                title: const Text(
+                  'IP Address',
+                  style: TextStyle(fontWeight: FontWeight.w500),
+                ),
+                subtitle: Text(
+                  _ipAddress,
+                  style: const TextStyle(fontFamily: 'monospace'),
                 ),
               ),
-            ),
+            ],
+          ),
 
-            const SizedBox(height: 16),
+          const SizedBox(height: 24),
 
-            // App Information
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'App Information',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 16),
-                    const ListTile(
-                      leading: Icon(Icons.info),
-                      title: Text('Version'),
-                      subtitle: Text('1.0.0'),
-                    ),
-                    const ListTile(
-                      leading: Icon(Icons.description),
-                      title: Text('Description'),
-                      subtitle: Text('Automated WiFi file sharing app'),
-                    ),
-                  ],
+          // File Transfer Settings
+          _buildSectionCard(
+            title: 'Preferences',
+            icon: Icons.tune_rounded,
+            children: [
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text(
+                  'Notifications',
+                  style: TextStyle(fontWeight: FontWeight.w500),
                 ),
+                subtitle: const Text('Show alerts for file transfers'),
+                value: _notificationsEnabled,
+                thumbColor: WidgetStateProperty.resolveWith<Color?>((
+                  Set<WidgetState> states,
+                ) {
+                  if (states.contains(WidgetState.selected)) {
+                    return Theme.of(context).colorScheme.primary;
+                  }
+                  return null;
+                }),
+                onChanged: (value) async {
+                  await _saveSetting('notifications_enabled', value);
+                  setState(() {
+                    _notificationsEnabled = value;
+                  });
+                },
               ),
-            ),
-          ],
-        ),
+            ],
+          ),
+
+          const SizedBox(height: 24),
+
+          // App Information
+          _buildSectionCard(
+            title: 'About',
+            icon: Icons.info_outline_rounded,
+            children: [
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.teal.withAlpha((0.1 * 255).round()),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.verified_rounded,
+                    color: Colors.teal,
+                    size: 20,
+                  ),
+                ),
+                title: const Text(
+                  'Version',
+                  style: TextStyle(fontWeight: FontWeight.w500),
+                ),
+                subtitle: const Text('1.0.3'),
+              ),
+              const Divider(height: 24),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.indigo.withAlpha((0.1 * 255).round()),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.description_rounded,
+                    color: Colors.indigo,
+                    size: 20,
+                  ),
+                ),
+                title: const Text(
+                  'Description',
+                  style: TextStyle(fontWeight: FontWeight.w500),
+                ),
+                subtitle: const Text('Automated WiFi file sharing app'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 32),
+        ],
       ),
     );
   }

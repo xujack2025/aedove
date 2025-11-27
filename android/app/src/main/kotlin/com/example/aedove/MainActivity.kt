@@ -33,7 +33,7 @@ class MainActivity : FlutterActivity() {
             multicastLock = wifiManager.createMulticastLock("aedove_multicast")
             multicastLock?.setReferenceCounted(false)
             multicastLock?.acquire()
-            android.util.Log.d("AeDove", "Multicast lock acquired")
+            android.util.Log.d("Aedove", "Multicast lock acquired")
 
             // Acquire partial wake lock to keep CPU awake for network operations
             val powerManager = applicationContext.getSystemService(Context.POWER_SERVICE) as PowerManager
@@ -42,9 +42,9 @@ class MainActivity : FlutterActivity() {
                 "aedove::NetworkWakeLock"
             )
             wakeLock?.acquire(10*60*1000L /*10 minutes*/)
-            android.util.Log.d("AeDove", "Wake lock acquired")
+            android.util.Log.d("Aedove", "Wake lock acquired")
         } catch (e: Exception) {
-            android.util.Log.e("AeDove", "Error acquiring locks: ${e.message}")
+            android.util.Log.e("Aedove", "Error acquiring locks: ${e.message}")
         }
     }
 
@@ -53,9 +53,9 @@ class MainActivity : FlutterActivity() {
         try {
             multicastLock?.release()
             wakeLock?.release()
-            android.util.Log.d("AeDove", "Locks released")
+            android.util.Log.d("Aedove", "Locks released")
         } catch (e: Exception) {
-            android.util.Log.e("AeDove", "Error releasing locks: ${e.message}")
+            android.util.Log.e("Aedove", "Error releasing locks: ${e.message}")
         }
     }
 }

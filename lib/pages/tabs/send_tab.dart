@@ -150,8 +150,8 @@ class _SendTabState extends State<SendTab> {
           setState(() {
             _isPickerActive = false;
           });
-          return;
         }
+        return;
       }
 
       // Fallback: generic file picker filtered to media
@@ -232,242 +232,375 @@ class _SendTabState extends State<SendTab> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 0, horizontal: 24.0),
-      child: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const SizedBox(height: 8),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildSelectionCard({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha((0.1 * 255).round()),
+            blurRadius: 10,
+            spreadRadius: 2,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(24),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Container(
+            height: 140,
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(
-                  'Selection',
-                  style: Theme.of(context).textTheme.headlineSmall,
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: color.withAlpha((0.1 * 255).round()),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(icon, size: 32, color: color),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 12),
+                Text(
+                  label,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 16,
+                  ),
+                ),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
 
-            // File Selection
-            if (Platform.isAndroid || Platform.isIOS) ...[
-              Row(
-                children: [
-                  // File selection buttons
-                  SizedBox(
-                    width: 84,
-                    height: 72,
-                    child: ElevatedButton(
-                      onPressed: _pickFiles,
-                      style: ElevatedButton.styleFrom(
-                        padding: EdgeInsets.zero,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                      ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.folder_open, size: 32),
-                          const SizedBox(height: 4),
-                          Text('Files'),
-                        ],
-                      ),
-                    ),
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(vertical: 0, horizontal: 24.0),
+      physics: const BouncingScrollPhysics(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const SizedBox(height: 24),
+          Text(
+            'Send Files',
+            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Select files or media to share with nearby devices',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: Theme.of(
+                context,
+              ).colorScheme.onSurface.withAlpha((0.6 * 255).round()),
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // File Selection
+          if (Platform.isAndroid || Platform.isIOS) ...[
+            Row(
+              children: [
+                Expanded(
+                  child: _buildSelectionCard(
+                    icon: Icons.folder_open_rounded,
+                    label: 'Files',
+                    color: Colors.blue,
+                    onTap: _pickFiles,
                   ),
-                  const SizedBox(width: 12),
-
-                  // Media selection button
-                  SizedBox(
-                    width: 84,
-                    height: 72,
-                    child: ElevatedButton(
-                      onPressed: _pickMedia,
-                      style: ElevatedButton.styleFrom(
-                        padding: EdgeInsets.zero,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                      ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.photo_library, size: 32),
-                          const SizedBox(height: 4),
-                          Text('Media'),
-                        ],
-                      ),
-                    ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: _buildSelectionCard(
+                    icon: Icons.photo_library_rounded,
+                    label: 'Media',
+                    color: Colors.purple,
+                    onTap: _pickMedia,
                   ),
-                ],
-              ),
-            ] else ...[
-              Row(
-                children: [
-                  SizedBox(
-                    width: 84,
-                    height: 72,
-                    child: ElevatedButton(
-                      onPressed: _pickFiles,
-                      style: ElevatedButton.styleFrom(
-                        padding: EdgeInsets.zero,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                      ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.folder_open, size: 32),
-                          const SizedBox(height: 4),
-                          Text('Files'),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
+                ),
+              ],
+            ),
+          ] else ...[
+            _buildSelectionCard(
+              icon: Icons.folder_open_rounded,
+              label: 'Select Files',
+              color: Colors.blue,
+              onTap: _pickFiles,
+            ),
+          ],
 
-            const SizedBox(height: 16),
+          const SizedBox(height: 32),
 
-            // Selected Files
-            if (_selectedFiles.isNotEmpty) ...[
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
+          // Selected Files
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 300),
+            child: _selectedFiles.isNotEmpty
+                ? Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
-                            'Selected Files (${_selectedFiles.length})',
-                            style: Theme.of(context).textTheme.titleMedium,
+                            'Selected (${_selectedFiles.length})',
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.bold),
                           ),
-                          IconButton(
+                          TextButton.icon(
                             onPressed: _clearFiles,
-                            icon: const Icon(Icons.clear),
-                            tooltip: 'Clear all files',
+                            icon: const Icon(Icons.clear_all, size: 20),
+                            label: const Text('Clear'),
+                            style: TextButton.styleFrom(
+                              foregroundColor: Colors.red,
+                            ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 12),
                       SizedBox(
-                        height: 150,
+                        height: 140,
                         child: ListView.builder(
+                          scrollDirection: Axis.horizontal,
+                          physics: const BouncingScrollPhysics(),
                           itemCount: _selectedFiles.length,
                           itemBuilder: (context, index) {
                             final file = _selectedFiles[index];
-                            return ListTile(
-                              leading: const Icon(Icons.insert_drive_file),
-                              title: Text(
-                                p.basename(file.path),
-                                overflow: TextOverflow.ellipsis,
+                            return Container(
+                              width: 110,
+                              margin: const EdgeInsets.only(
+                                right: 12,
+                                bottom: 4,
                               ),
-                              subtitle: Text(
-                                '${(file.lengthSync() / 1024 / 1024).toStringAsFixed(2)} MB',
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).cardColor,
+                                borderRadius: BorderRadius.circular(16),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withAlpha(
+                                      (0.05 * 255).round(),
+                                    ),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
+                              ),
+                              padding: const EdgeInsets.all(12),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.insert_drive_file_rounded,
+                                    size: 36,
+                                    color: Colors.blue.shade400,
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Text(
+                                    p.basename(file.path),
+                                    overflow: TextOverflow.ellipsis,
+                                    textAlign: TextAlign.center,
+                                    maxLines: 2,
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    '${(file.lengthSync() / 1024 / 1024).toStringAsFixed(2)} MB',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: Theme.of(
+                                        context,
+                                      ).textTheme.bodySmall?.color,
+                                    ),
+                                  ),
+                                ],
                               ),
                             );
                           },
                         ),
                       ),
                     ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-            ],
+                  )
+                : const SizedBox.shrink(),
+          ),
 
-            // Discovered Devices
-            if (_discoveredDevices.isNotEmpty) ...[
-              Padding(
-                padding: const EdgeInsets.all(0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Available Devices (${_discoveredDevices.length})',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      height: 400,
-                      child: ListView.builder(
-                        itemCount: _discoveredDevices.length,
-                        itemBuilder: (context, index) {
-                          final device = _discoveredDevices[index];
-                          return Card(
-                            child: ListTile(
-                              leading: const Icon(Icons.devices),
-                              title: Text(device.name),
-                              subtitle: Text('${device.ip}:${device.port}'),
-                              trailing: _selectedFiles.isNotEmpty
-                                  ? ElevatedButton.icon(
-                                      onPressed:
-                                          (_sendingByDeviceId[device.id] ??
-                                              false)
-                                          ? null
-                                          : () => _sendFilesToDevice(device),
-                                      icon:
-                                          (_sendingByDeviceId[device.id] ??
-                                              false)
-                                          ? const SizedBox(
-                                              width: 16,
-                                              height: 16,
-                                              child: CircularProgressIndicator(
-                                                strokeWidth: 2,
-                                              ),
-                                            )
-                                          : const Icon(Icons.send),
-                                      label: Text(
-                                        (_sendingByDeviceId[device.id] ?? false)
-                                            ? 'Sending...'
-                                            : 'Send',
-                                      ),
-                                    )
-                                  : const Icon(Icons.wifi, color: Colors.green),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ] else ...[
-              // No devices discovered
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(32.0),
-                  child: Column(
-                    children: [
-                      Icon(Icons.device_hub, size: 64, color: Colors.grey[400]),
-                      const SizedBox(height: 16),
-                      Text(
-                        'No devices found',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Make sure other devices are connected to the same WiFi network and have AeDove running',
-                        style: Theme.of(context).textTheme.bodyMedium,
-                        textAlign: TextAlign.center,
+          const SizedBox(height: 24),
+
+          // Discovered Devices
+          Text(
+            'Nearby Devices',
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 16),
+
+          if (_discoveredDevices.isNotEmpty) ...[
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: _discoveredDevices.length,
+              separatorBuilder: (context, index) => const SizedBox(height: 12),
+              itemBuilder: (context, index) {
+                final device = _discoveredDevices[index];
+                final isSending = _sendingByDeviceId[device.id] ?? false;
+
+                return Container(
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).cardColor,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withAlpha((0.05 * 255).round()),
+                        blurRadius: 10,
+                        offset: const Offset(0, 2),
                       ),
                     ],
                   ),
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.all(16),
+                    leading: Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: Colors.indigo.withAlpha((0.1 * 255).round()),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.computer_rounded,
+                        color: Colors.indigo,
+                      ),
+                    ),
+                    title: Text(
+                      device.name,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: Text(
+                      '${device.ip}:${device.port}',
+                      style: TextStyle(color: Colors.grey[600]),
+                    ),
+                    trailing: _selectedFiles.isNotEmpty
+                        ? ElevatedButton(
+                            onPressed: isSending
+                                ? null
+                                : () => _sendFilesToDevice(device),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.indigo,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                                vertical: 12,
+                              ),
+                              elevation: 0,
+                            ),
+                            child: isSending
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Text('Send'),
+                          )
+                        : Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.green.withAlpha(
+                                (0.1 * 255).round(),
+                              ),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.wifi,
+                                  size: 16,
+                                  color: Colors.green,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'Ready',
+                                  style: TextStyle(
+                                    color: Colors.green[700],
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                  ),
+                );
+              },
+            ),
+          ] else ...[
+            // No devices discovered
+            Container(
+              padding: const EdgeInsets.all(40),
+              decoration: BoxDecoration(
+                color: Theme.of(
+                  context,
+                ).cardColor.withAlpha((0.5 * 255).round()),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: Theme.of(
+                    context,
+                  ).dividerColor.withAlpha((0.1 * 255).round()),
+                  width: 2,
                 ),
               ),
-            ],
+              child: Column(
+                children: [
+                  Icon(Icons.radar_rounded, size: 64, color: Colors.grey[300]),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Scanning for devices...',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: Colors.grey[600],
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Ensure devices are on the same Wi-Fi network',
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodyMedium?.copyWith(color: Colors.grey[500]),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
           ],
-        ),
+          const SizedBox(height: 32),
+        ],
       ),
     );
   }
