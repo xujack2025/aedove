@@ -73,7 +73,8 @@ class MediaStoreService {
         await tempFile.delete();
       }
 
-      return 'Saved to gallery: $fileName';
+      // Return a special marker to indicate gallery save
+      return 'gallery://$fileName';
     } catch (e) {
       debugPrint('Error saving to gallery: $e');
       return null;

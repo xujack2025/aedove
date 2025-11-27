@@ -7,6 +7,7 @@ import 'package:aedove/services/file_transfer_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:aedove/services/permission_service.dart';
 import 'package:permission_handler/permission_handler.dart' as ph;
+import 'package:open_file/open_file.dart';
 
 class ReceiveTab extends StatefulWidget {
   const ReceiveTab({super.key});
@@ -391,60 +392,71 @@ class _ReceiveTabState extends State<ReceiveTab>
 
             // Last downloaded file path
             if (_lastDownloadedPath.isNotEmpty)
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-                decoration: BoxDecoration(
-                  color: theme.cardColor,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey.withValues(alpha: 0.1)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.03),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
+              InkWell(
+                onTap: () => _openFile(_lastDownloadedPath),
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    color: theme.cardColor,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: Colors.grey.withValues(alpha: 0.1),
                     ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.green.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(8),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.03),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
                       ),
-                      child: const Icon(
-                        Icons.check_circle_outline,
-                        color: Colors.green,
-                        size: 20,
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.green.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(
+                          Icons.check_circle_outline,
+                          color: Colors.green,
+                          size: 20,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Last Received',
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: Colors.grey,
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Last Received',
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: Colors.grey,
+                              ),
                             ),
-                          ),
-                          Text(
-                            _lastDownloadedPath.split('/').last,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.w500,
+                            Text(
+                              _lastDownloadedPath.split('/').last,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
+                      Icon(
+                        Icons.open_in_new,
+                        size: 18,
+                        color: Colors.grey[600],
+                      ),
+                    ],
+                  ),
                 ),
               ),
 
@@ -469,6 +481,7 @@ class _ReceiveTabState extends State<ReceiveTab>
     );
   }
 
+  // File transfer request card
   Widget _buildRequestCard(FileTransferRequest request, ThemeData theme) {
     return Container(
       decoration: BoxDecoration(
@@ -476,7 +489,7 @@ class _ReceiveTabState extends State<ReceiveTab>
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
+            color: Colors.black.withValues(alpha: 0.2),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -527,42 +540,57 @@ class _ReceiveTabState extends State<ReceiveTab>
             ),
           ),
           const Divider(height: 1),
-          Row(
-            children: [
-              Expanded(
-                child: TextButton.icon(
-                  onPressed: () => _denyFileTransfer(request.id),
-                  icon: const Icon(Icons.close, size: 18),
-                  label: const Text('Decline'),
-                  style: TextButton.styleFrom(
-                    foregroundColor: Colors.red,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: const RoundedRectangleBorder(
-                      borderRadius: BorderRadius.only(
-                        bottomLeft: Radius.circular(16),
+          SizedBox(
+            height: 48, // Matches your divider height
+            child: Row(
+              // This is the key: Force children to fill the vertical space
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: TextButton.icon(
+                    onPressed: () => _denyFileTransfer(request.id),
+                    icon: const Icon(Icons.close, size: 18),
+                    label: const Text('Decline'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.red,
+                      // Remove vertical padding so the button content centers automatically
+                      // within the stretched height
+                      padding: EdgeInsets.zero,
+                      // Optional: Removes default margin around the button touch target
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      shape: const RoundedRectangleBorder(
+                        borderRadius: BorderRadius.only(
+                          bottomLeft: Radius.circular(16),
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-              Container(width: 1, height: 48, color: Colors.grey[200]),
-              Expanded(
-                child: TextButton.icon(
-                  onPressed: () => _acceptFileTransfer(request.id),
-                  icon: const Icon(Icons.check, size: 18),
-                  label: const Text('Accept'),
-                  style: TextButton.styleFrom(
-                    foregroundColor: Colors.green,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: const RoundedRectangleBorder(
-                      borderRadius: BorderRadius.only(
-                        bottomRight: Radius.circular(16),
+                // Use VerticalDivider instead of Container for cleaner code inside a Row
+                VerticalDivider(
+                  width: 1,
+                  thickness: 1,
+                  color: Colors.grey[400],
+                ),
+                Expanded(
+                  child: TextButton.icon(
+                    onPressed: () => _acceptFileTransfer(request.id),
+                    icon: const Icon(Icons.check, size: 18),
+                    label: const Text('Accept'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.green,
+                      padding: EdgeInsets.zero, // Remove vertical padding
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      shape: const RoundedRectangleBorder(
+                        borderRadius: BorderRadius.only(
+                          bottomRight: Radius.circular(16),
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
       ),
@@ -583,12 +611,12 @@ class _ReceiveTabState extends State<ReceiveTab>
       _pendingRequests.removeWhere((request) => request.id == requestId);
     });
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('File transfer accepted'),
-        backgroundColor: Colors.green,
-      ),
-    );
+    // ScaffoldMessenger.of(context).showSnackBar(
+    //   const SnackBar(
+    //     content: Text('File transfer accepted'),
+    //     backgroundColor: Colors.green,
+    //   ),
+    // );
   }
 
   void _denyFileTransfer(String requestId) {
@@ -597,12 +625,12 @@ class _ReceiveTabState extends State<ReceiveTab>
       _pendingRequests.removeWhere((request) => request.id == requestId);
     });
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('File transfer denied'),
-        backgroundColor: Colors.red,
-      ),
-    );
+    // ScaffoldMessenger.of(context).showSnackBar(
+    //   const SnackBar(
+    //     content: Text('File transfer denied'),
+    //     backgroundColor: Colors.red,
+    //   ),
+    // );
   }
 
   String _formatFileSize(int bytes) {
@@ -612,5 +640,54 @@ class _ReceiveTabState extends State<ReceiveTab>
       return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
     }
     return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
+  }
+
+  Future<void> _openFile(String filePath) async {
+    try {
+      // Check if it's a gallery marker (from our MediaStoreService)
+      if (filePath.startsWith('gallery://')) {
+        final fileName = filePath.replaceFirst('gallery://', '');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                '$fileName saved to gallery. Open your Photos/Gallery app to view.',
+              ),
+              backgroundColor: Colors.blue,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+        return;
+      }
+
+      // Check if it's a content URI or gallery path
+      if (filePath.startsWith('content://') ||
+          filePath.contains('DCIM') ||
+          filePath.contains('Pictures') ||
+          filePath.contains('Movies')) {
+        _showOpenError(
+          'File saved to gallery. Open your Photos/Gallery app to view.',
+        );
+        return;
+      }
+
+      // Try opening with OpenFile for regular files
+      final result = await OpenFile.open(filePath);
+      if (result.type != ResultType.done && mounted) {
+        _showOpenError('Could not open file: ${result.message}');
+      }
+    } catch (e) {
+      debugPrint('Error opening file: $e');
+      _showOpenError('Error opening file: $e');
+    }
+  }
+
+  void _showOpenError(String message) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message), backgroundColor: Colors.orange),
+      );
+    }
   }
 }

@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 // import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:awesome_notifications/awesome_notifications.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class NotificationService {
   static Future<void> initialize() async {
@@ -12,7 +13,7 @@ class NotificationService {
           channelKey: 'file_transfer',
           channelName: 'File Transfer',
           channelDescription: 'Notifications for incoming file transfers',
-          importance: NotificationImportance.High,
+          importance: NotificationImportance.Max,
           defaultColor: Color(0xFF0175C2),
           ledColor: Colors.white,
         ),
@@ -20,7 +21,7 @@ class NotificationService {
           channelKey: 'file_received',
           channelName: 'File Received',
           channelDescription: 'Notifications after receiving files',
-          importance: NotificationImportance.High,
+          importance: NotificationImportance.Max,
           defaultColor: Color(0xFF0175C2),
           ledColor: Colors.white,
         ),
@@ -28,7 +29,7 @@ class NotificationService {
           channelKey: 'file_sent',
           channelName: 'File Sent',
           channelDescription: 'Notifications after successfully sending files',
-          importance: NotificationImportance.High,
+          importance: NotificationImportance.Max,
           defaultColor: Color(0xFF0175C2),
           ledColor: Colors.white,
         ),
@@ -61,12 +62,23 @@ class NotificationService {
     required String fileName,
     required String fileSize,
   }) async {
+    // Check if notifications are enabled in app settings
+    final prefs = await SharedPreferences.getInstance();
+    final notificationsEnabled = prefs.getBool('notifications_enabled') ?? true;
+    if (!notificationsEnabled) return;
+
+    final allowed = await AwesomeNotifications().isNotificationAllowed();
+    if (!allowed) return;
+
     await AwesomeNotifications().createNotification(
       content: NotificationContent(
         id: senderId.hashCode,
         channelKey: 'file_transfer',
         title: 'Incoming File Transfer',
         body: 'File: $fileName ($fileSize)',
+        wakeUpScreen: true,
+        fullScreenIntent: true,
+        criticalAlert: true,
         payload: {
           'action': 'file_transfer_request',
           'sender_id': senderId,
@@ -81,6 +93,14 @@ class NotificationService {
     required String fileName,
     required String fileSize,
   }) async {
+    // Check if notifications are enabled in app settings
+    final prefs = await SharedPreferences.getInstance();
+    final notificationsEnabled = prefs.getBool('notifications_enabled') ?? true;
+    if (!notificationsEnabled) return;
+
+    final allowed = await AwesomeNotifications().isNotificationAllowed();
+    if (!allowed) return;
+
     await AwesomeNotifications().createNotification(
       content: NotificationContent(
         id: DateTime.now().millisecondsSinceEpoch % 100000,
@@ -88,6 +108,7 @@ class NotificationService {
         title: 'File Sent Successfully',
         body: 'File: $fileName ($fileSize)',
         notificationLayout: NotificationLayout.Default,
+        wakeUpScreen: true,
         payload: {
           'action': 'file_sent',
           'file_name': fileName,
@@ -103,6 +124,14 @@ class NotificationService {
     required String filePath,
     bool isIOS = false,
   }) async {
+    // Check if notifications are enabled in app settings
+    final prefs = await SharedPreferences.getInstance();
+    final notificationsEnabled = prefs.getBool('notifications_enabled') ?? true;
+    if (!notificationsEnabled) return;
+
+    final allowed = await AwesomeNotifications().isNotificationAllowed();
+    if (!allowed) return;
+
     String notificationMessage;
     if (isIOS) {
       notificationMessage = 'Saved to Documents\nFile: $fileName ($fileSize)';
@@ -118,6 +147,7 @@ class NotificationService {
         channelKey: 'file_received',
         title: 'File Received',
         body: notificationMessage,
+        wakeUpScreen: true,
         payload: {'action': 'file_received', 'file_path': filePath},
       ),
     );

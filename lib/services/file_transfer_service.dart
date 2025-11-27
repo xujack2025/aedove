@@ -120,9 +120,9 @@ class FileTransferService {
           debugPrint('Failed to restart server: $e');
         });
       } else {
-        debugPrint(
-          '✓ File transfer server health check OK (port: $_currentPort)',
-        );
+        // debugPrint(
+        //   '✓ File transfer server health check OK (port: $_currentPort)',
+        // );
       }
     });
   }

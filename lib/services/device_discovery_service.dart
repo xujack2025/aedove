@@ -218,7 +218,7 @@ class DeviceDiscoveryService {
 
       // Create the service with a unique name and file transfer port
       final service = BonsoirService(
-        name: '${deviceInfo.name}_${deviceInfo.id.substring(0, 8)}',
+        name: deviceInfo.name,
         type: _serviceType,
         port:
             FileTransferService.getServerPort(), // Advertise actual file transfer port
@@ -401,7 +401,10 @@ class DeviceDiscoveryService {
 
           final device = DeviceInfo(
             id: id,
-            name: instance.split('._').first,
+            name: instance
+                .split('._')
+                .first
+                .split('_')[0], // Remove device ID suffix if present
             ip: resolvedIp,
             port: tport,
             lastSeen: DateTime.now(),
@@ -468,7 +471,10 @@ class DeviceDiscoveryService {
           if (resolvedIp == null || resolvedIp.isEmpty || tport <= 0) continue;
           final device = DeviceInfo(
             id: id,
-            name: instance.split('._').first,
+            name: instance
+                .split('._')
+                .first
+                .split('_')[0], // Remove device ID suffix if present
             ip: resolvedIp,
             port: tport,
             lastSeen: DateTime.now(),
@@ -794,7 +800,7 @@ class DeviceDiscoveryService {
 
       final deviceInfo = DeviceInfo(
         id: serviceId,
-        name: service.name,
+        name: service.name.split('_')[0], // Remove device ID suffix if present
         ip: serviceIp,
         port: port,
         lastSeen: DateTime.now(),
