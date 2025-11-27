@@ -105,11 +105,9 @@ class NotificationService {
   }) async {
     String notificationMessage;
     if (isIOS) {
-      notificationMessage =
-          'Saved to Documents\nFile: $fileName ($fileSize)';
+      notificationMessage = 'Saved to Documents\nFile: $fileName ($fileSize)';
     } else if (Platform.isWindows) {
-      notificationMessage =
-          'Saved to Downloads\nFile: $fileName ($fileSize)';
+      notificationMessage = 'Saved to Downloads\nFile: $fileName ($fileSize)';
     } else {
       notificationMessage = 'File: $fileName ($fileSize)';
     }
@@ -130,11 +128,11 @@ class NotificationService {
 
     switch (payload['action']) {
       case 'file_transfer_request':
-        print('File transfer request from ${payload['sender_id']}');
+        debugPrint('File transfer request from ${payload['sender_id']}');
         break;
 
       case 'file_received':
-        print('Open file at: ${payload['file_path']}');
+        debugPrint('Open file at: ${payload['file_path']}');
         break;
     }
   }
@@ -345,7 +343,7 @@ class NotificationService {
           _notifications.cancel(payload['notification_id']);
         }
       } catch (e) {
-        print('Error handling notification tap: $e');
+        debugPrint('Error handling notification tap: $e');
       }
     }
   }
@@ -353,13 +351,13 @@ class NotificationService {
   static void _handleFileReceived(Map<String, dynamic> payload) {
     // Here you could implement opening the file or its containing folder
     final filePath = payload['file_path'];
-    print('Opening received file: $filePath');
+    debugPrint('Opening received file: $filePath');
   }
 
   static void _handleFileTransferRequest(Map<String, dynamic> payload) {
     // This would typically open the app to the file transfer screen
     // For now, we'll just print the details
-    print('File transfer request from: ${payload['sender_id']}');
-    print('File: ${payload['file_name']} (${payload['file_size']})');
+    debugPrint('File transfer request from: ${payload['sender_id']}');
+    debugPrint('File: ${payload['file_name']} (${payload['file_size']})');
   }
 }*/

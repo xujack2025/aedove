@@ -1,15 +1,16 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'dart:async';
 import 'package:url_launcher/url_launcher.dart';
 
 class WebViewPage extends StatefulWidget {
-  const WebViewPage({Key? key, required this.url}) : super(key: key);
+  const WebViewPage({super.key, required this.url});
 
   final String url;
 
   @override
-  _WebViewPageState createState() => _WebViewPageState();
+  State<WebViewPage> createState() => _WebViewPageState();
 }
 
 class _WebViewPageState extends State<WebViewPage> {
@@ -29,17 +30,16 @@ class _WebViewPageState extends State<WebViewPage> {
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () async {
-        return true;
-      },
+    return PopScope(
+      canPop: true,
       child: Scaffold(
         appBar: AppBar(
           leading: IconButton(
-              icon: Icon(Icons.arrow_back, color: Colors.white, size: 35),
-              onPressed: () async {
-                Navigator.pop(context);
-              }),
+            icon: Icon(Icons.arrow_back, color: Colors.white, size: 35),
+            onPressed: () async {
+              Navigator.pop(context);
+            },
+          ),
           actions: [
             Row(
               children: [
@@ -113,7 +113,9 @@ class _WebViewPageState extends State<WebViewPage> {
     try {
       await launchUrl((url), mode: LaunchMode.externalApplication);
     } catch (exception) {
-      print(exception);
+      if (kDebugMode) {
+        print(exception);
+      }
     }
   }
 }

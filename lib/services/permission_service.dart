@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 class PermissionService {
@@ -32,7 +33,9 @@ class PermissionService {
             return true;
           }
         } catch (e) {
-          print('Media permissions not available (likely older Android): $e');
+          debugPrint(
+            'Media permissions not available (likely older Android): $e',
+          );
         }
 
         // Fallback to legacy storage permission for Android 10-12
@@ -40,12 +43,12 @@ class PermissionService {
           final status = await Permission.storage.request();
           if (status.isGranted || status.isLimited) return true;
         } catch (e) {
-          print('Storage permission request failed: $e');
+          debugPrint('Storage permission request failed: $e');
         }
 
         // Even if permissions are denied, app can still save to app-specific storage
         // So return true to allow the app to continue
-        print(
+        debugPrint(
           'Storage permissions not fully granted, will use app-specific storage',
         );
         return true;
@@ -55,7 +58,7 @@ class PermissionService {
         return true;
       }
     } catch (e) {
-      print('Error requesting storage permission: $e');
+      debugPrint('Error requesting storage permission: $e');
     }
     return false;
   }
@@ -87,14 +90,16 @@ class PermissionService {
 
         // If already granted or limited, return true
         if (status.isGranted || status.isLimited) {
-          print('iOS location permission already granted/limited: $status');
+          debugPrint(
+            'iOS location permission already granted/limited: $status',
+          );
           return true;
         }
 
         // If permanently denied, return true anyway since iOS can use Bonjour/mDNS
         // without location permission for local network discovery
         if (status.isPermanentlyDenied) {
-          print(
+          debugPrint(
             'iOS location permission permanently denied. '
             'Local network discovery will still work via Bonjour/mDNS.',
           );
@@ -103,13 +108,13 @@ class PermissionService {
 
         // If denied but not permanently, request permission
         if (status.isDenied) {
-          print('iOS requesting location permission...');
+          debugPrint('iOS requesting location permission...');
           status = await Permission.locationWhenInUse.request();
-          print('iOS location permission result: $status');
+          debugPrint('iOS location permission result: $status');
 
           // If still denied after request, that's OK for iOS
           if (status.isPermanentlyDenied || status.isDenied) {
-            print(
+            debugPrint(
               'iOS location permission denied, but local network discovery will still work.',
             );
             return true; // Return true to suppress warnings
@@ -122,7 +127,7 @@ class PermissionService {
         return true;
       }
     } catch (e) {
-      print('Error requesting location permission: $e');
+      debugPrint('Error requesting location permission: $e');
     }
     return false;
   }

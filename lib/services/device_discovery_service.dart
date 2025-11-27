@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:convert';
 import 'dart:async';
 import 'package:bonsoir/bonsoir.dart';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:uuid/uuid.dart';
@@ -79,18 +80,18 @@ class DeviceDiscoveryService {
 
   static Future<void> start() async {
     if (_isStarted) {
-      print('Device discovery service is already running');
+      debugPrint('Device discovery service is already running');
       return;
     }
 
     if (_isInitializing) {
-      print('Device discovery service is already initializing');
+      debugPrint('Device discovery service is already initializing');
       return;
     }
 
     try {
       _isInitializing = true;
-      print('Starting device discovery service...');
+      debugPrint('Starting device discovery service...');
 
       // Get and store current device ID/IP first
       final deviceInfo = await _getDeviceInfo();
@@ -105,10 +106,10 @@ class DeviceDiscoveryService {
       );
 
       _isStarted = true;
-      print('Device discovery service started successfully');
+      debugPrint('Device discovery service started successfully');
     } catch (e, stackTrace) {
-      print('Failed to start device discovery service: $e');
-      print('Stack trace: $stackTrace');
+      debugPrint('Failed to start device discovery service: $e');
+      debugPrint('Stack trace: $stackTrace');
       await stop();
       rethrow;
     } finally {
@@ -127,7 +128,7 @@ class DeviceDiscoveryService {
   }
 
   static Future<void> stop() async {
-    print('Stopping device discovery service...');
+    debugPrint('Stopping device discovery service...');
     _isStarted = false;
 
     try {
@@ -136,10 +137,12 @@ class DeviceDiscoveryService {
         try {
           await _broadcast!.stop().timeout(
             const Duration(seconds: 5),
-            onTimeout: () => print('Broadcast stop timed out'),
+            onTimeout: () {
+              debugPrint('Broadcast stop timed out');
+            },
           );
         } catch (e) {
-          print('Error stopping broadcast service: $e');
+          debugPrint('Error stopping broadcast service: $e');
         } finally {
           _broadcast = null;
         }
@@ -150,10 +153,12 @@ class DeviceDiscoveryService {
         try {
           await _discovery!.stop().timeout(
             const Duration(seconds: 5),
-            onTimeout: () => print('Discovery stop timed out'),
+            onTimeout: () {
+              debugPrint('Discovery stop timed out');
+            },
           );
         } catch (e) {
-          print('Error stopping discovery service: $e');
+          debugPrint('Error stopping discovery service: $e');
         } finally {
           _discovery = null;
         }
@@ -164,7 +169,7 @@ class DeviceDiscoveryService {
         try {
           _udpSocket!.close();
         } catch (e) {
-          print('Error closing UDP socket: $e');
+          debugPrint('Error closing UDP socket: $e');
         } finally {
           _udpSocket = null;
         }
@@ -184,9 +189,9 @@ class DeviceDiscoveryService {
       _reconnectTimer?.cancel();
       _mdnsRefreshTimer?.cancel();
 
-      print('Device discovery service stopped successfully');
+      debugPrint('Device discovery service stopped successfully');
     } catch (e) {
-      print('Error stopping device discovery service: $e');
+      debugPrint('Error stopping device discovery service: $e');
     } finally {
       // Ensure all resources are cleared even if there were errors
       _broadcast = null;
@@ -202,14 +207,14 @@ class DeviceDiscoveryService {
   }
 
   static Future<void> _startMdnsService() async {
-    print('Initializing mDNS service...');
+    debugPrint('Initializing mDNS service...');
     try {
       final deviceInfo = await _getDeviceInfo();
       if (deviceInfo.ip == 'unknown') {
         throw Exception('Could not determine device IP address');
       }
 
-      print('Device info: ${deviceInfo.toJson()}');
+      debugPrint('Device info: ${deviceInfo.toJson()}');
 
       // Create the service with a unique name and file transfer port
       final service = BonsoirService(
@@ -234,9 +239,9 @@ class DeviceDiscoveryService {
           onTimeout: () =>
               throw TimeoutException('Broadcast initialization timed out'),
         );
-        print('Broadcast service initialized');
+        debugPrint('Broadcast service initialized');
       } catch (e) {
-        print('Error initializing broadcast service: $e');
+        debugPrint('Error initializing broadcast service: $e');
         _broadcast = null;
       }
 
@@ -248,9 +253,9 @@ class DeviceDiscoveryService {
           onTimeout: () =>
               throw TimeoutException('Discovery initialization timed out'),
         );
-        print('Discovery service initialized');
+        debugPrint('Discovery service initialized');
       } catch (e) {
-        print('Error initializing discovery service: $e');
+        debugPrint('Error initializing discovery service: $e');
         _discovery = null;
       }
 
@@ -264,13 +269,13 @@ class DeviceDiscoveryService {
       // Set up discovery listener with resolution when needed
       _discovery?.eventStream?.listen((event) async {
         if (_verbose) {
-          print(
+          debugPrint(
             'Received mDNS event: ${event.runtimeType} - ${event.toString()}',
           );
         }
         if (event.service != null) {
           if (_verbose) {
-            print('Service details: ${event.service?.toJson()}');
+            debugPrint('Service details: ${event.service?.toJson()}');
           }
           if (event.toString().contains('Found') ||
               event.toString().contains('Resolved') ||
@@ -282,7 +287,7 @@ class DeviceDiscoveryService {
             _handleLostService(event.service);
           }
         }
-      }, onError: (e) => _verbose ? print('mDNS event error: $e') : null);
+      }, onError: (e) => _verbose ? debugPrint('mDNS event error: $e') : null);
 
       // Removed frequent mDNS restart to reduce noise and instability.
 
@@ -294,9 +299,9 @@ class DeviceDiscoveryService {
             onTimeout: () =>
                 throw TimeoutException('Broadcast start timed out'),
           );
-          if (_verbose) print('Broadcast service started');
+          if (_verbose) debugPrint('Broadcast service started');
         } catch (e) {
-          print('Error starting broadcast service: $e');
+          debugPrint('Error starting broadcast service: $e');
           _broadcast = null;
         }
       }
@@ -309,9 +314,9 @@ class DeviceDiscoveryService {
             onTimeout: () =>
                 throw TimeoutException('Discovery start timed out'),
           );
-          if (_verbose) print('Discovery service started');
+          if (_verbose) debugPrint('Discovery service started');
         } catch (e) {
-          print('Error starting discovery service: $e');
+          debugPrint('Error starting discovery service: $e');
           _discovery = null;
         }
       }
@@ -322,9 +327,9 @@ class DeviceDiscoveryService {
           'Failed to start both broadcast and discovery services',
         );
       }
-      if (_verbose) print('mDNS service started successfully');
+      if (_verbose) debugPrint('mDNS service started successfully');
     } catch (e) {
-      print('Error starting mDNS service: $e');
+      debugPrint('Error starting mDNS service: $e');
       rethrow;
     }
   }
@@ -405,7 +410,7 @@ class DeviceDiscoveryService {
         }
         client.stop();
       } catch (e) {
-        if (_verbose) print('multicast_dns fallback error: $e');
+        if (_verbose) debugPrint('multicast_dns fallback error: $e');
       }
     });
   }
@@ -472,13 +477,13 @@ class DeviceDiscoveryService {
         }
         client.stop();
       } catch (e) {
-        if (_verbose) print('windows multicast_dns fallback error: $e');
+        if (_verbose) debugPrint('windows multicast_dns fallback error: $e');
       }
     });
   }
 
   static Future<void> _startUdpBroadcast() async {
-    print('Starting UDP broadcast service...');
+    debugPrint('Starting UDP broadcast service...');
     await _initializeUdpSocket();
   }
 
@@ -510,7 +515,7 @@ class DeviceDiscoveryService {
           if (e.toString().contains('reusePort')) {
             return; // Ignore this specific error
           }
-          print('UDP socket error: $e');
+          debugPrint('UDP socket error: $e');
           // Don't reconnect immediately on every error to avoid loop
           // Only reconnect if socket is actually broken
           if (e.toString().contains('Closed') ||
@@ -523,7 +528,7 @@ class DeviceDiscoveryService {
           }
         },
         onDone: () {
-          print('UDP socket closed unexpectedly');
+          debugPrint('UDP socket closed unexpectedly');
           try {
             _udpSocket?.close();
           } catch (_) {}
@@ -543,9 +548,9 @@ class DeviceDiscoveryService {
         // Send initial broadcast
         await _sendUdpBroadcast();
       }
-      if (_verbose) print('UDP broadcast service started successfully');
+      if (_verbose) debugPrint('UDP broadcast service started successfully');
     } catch (e) {
-      print('Error initializing UDP socket: $e');
+      debugPrint('Error initializing UDP socket: $e');
       _scheduleReconnect();
       rethrow;
     }
@@ -555,11 +560,11 @@ class DeviceDiscoveryService {
     _reconnectTimer?.cancel();
     _reconnectTimer = Timer(_reconnectDelay, () async {
       if (_isStarted && !_isInitializing) {
-        if (_verbose) print('Attempting to reconnect UDP service...');
+        if (_verbose) debugPrint('Attempting to reconnect UDP service...');
         try {
           await _initializeUdpSocket();
         } catch (e) {
-          if (_verbose) print('Reconnection attempt failed: $e');
+          if (_verbose) debugPrint('Reconnection attempt failed: $e');
         }
       }
     });
@@ -568,14 +573,14 @@ class DeviceDiscoveryService {
   static Future<void> _sendUdpBroadcast() async {
     if (!_isStarted) return;
     if (_udpSocket == null) {
-      print('UDP socket is null, skipping broadcast');
+      debugPrint('UDP socket is null, skipping broadcast');
       return;
     }
 
     try {
       final deviceInfo = await _getDeviceInfo();
       if (deviceInfo.ip == 'unknown') {
-        if (_verbose) print('Cannot broadcast: IP address unknown');
+        if (_verbose) debugPrint('Cannot broadcast: IP address unknown');
         return;
       }
 
@@ -604,7 +609,7 @@ class DeviceDiscoveryService {
                 await Future.delayed(const Duration(milliseconds: 5));
               } catch (e) {
                 // Silently ignore individual send errors to prevent spam
-                if (_verbose) print('Failed to send to $targetIp: $e');
+                if (_verbose) debugPrint('Failed to send to $targetIp: $e');
               }
             }
           }
@@ -624,7 +629,7 @@ class DeviceDiscoveryService {
                 _udpPort,
               );
             } catch (e) {
-              if (_verbose) print('Global broadcast failed: $e');
+              if (_verbose) debugPrint('Global broadcast failed: $e');
             }
             // Directed broadcast for the subnet
             try {
@@ -634,7 +639,7 @@ class DeviceDiscoveryService {
                 _udpPort,
               );
             } catch (e) {
-              if (_verbose) print('Subnet broadcast failed: $e');
+              if (_verbose) debugPrint('Subnet broadcast failed: $e');
             }
           } else {
             // iOS: avoid 255.255.255.255. Probe subnet sparsely to reduce cost
@@ -649,7 +654,7 @@ class DeviceDiscoveryService {
                   );
                   await Future.delayed(const Duration(milliseconds: 2));
                 } catch (e) {
-                  if (_verbose) print('Failed to send to $targetIp: $e');
+                  if (_verbose) debugPrint('Failed to send to $targetIp: $e');
                 }
               }
             }
@@ -657,7 +662,7 @@ class DeviceDiscoveryService {
         }
       }
     } catch (e) {
-      if (_verbose) print('Error sending UDP broadcast: $e');
+      if (_verbose) debugPrint('Error sending UDP broadcast: $e');
       // Don't rethrow - let the timer continue
     }
   }
@@ -672,7 +677,7 @@ class DeviceDiscoveryService {
       // Ignore non-JSON payloads silently
       if (!trimmed.startsWith('{')) {
         if (_verbose) {
-          print(
+          debugPrint(
             'Ignored non-JSON UDP payload from ${datagram.address.address}:${datagram.port}',
           );
         }
@@ -697,8 +702,9 @@ class DeviceDiscoveryService {
           return;
         }
 
-        if (_verbose)
-          print('Found device via UDP ($type): ${deviceInfo.toJson()}');
+        if (_verbose) {
+          debugPrint('Found device via UDP ($type): ${deviceInfo.toJson()}');
+        }
 
         // If we received a discovery (not a response), reply.
         if (type == 'discovery') {
@@ -707,7 +713,7 @@ class DeviceDiscoveryService {
         _updateDiscoveredDevice(deviceInfo);
       }
     } catch (e) {
-      if (_verbose) print('Error handling UDP message: $e');
+      if (_verbose) debugPrint('Error handling UDP message: $e');
     }
   }
 
@@ -725,9 +731,9 @@ class DeviceDiscoveryService {
       });
 
       _udpSocket?.send(utf8.encode(message), address, port);
-      if (_verbose) print('Sent UDP response to ${address.address}:$port');
+      if (_verbose) debugPrint('Sent UDP response to ${address.address}:$port');
     } catch (e) {
-      if (_verbose) print('Error sending UDP response: $e');
+      if (_verbose) debugPrint('Error sending UDP response: $e');
     }
   }
 
@@ -779,7 +785,7 @@ class DeviceDiscoveryService {
       // Ensure we have the mandatory data we need to establish a connection
       if (serviceId == null || serviceIp == null || port <= 0) {
         if (_verbose) {
-          print(
+          debugPrint(
             'Ignoring mDNS record due to missing data. id: $serviceId, ip: $serviceIp, port: $port',
           );
         }
@@ -795,7 +801,7 @@ class DeviceDiscoveryService {
       );
       _updateDiscoveredDevice(deviceInfo);
     } catch (e) {
-      if (_verbose) print('Error handling discovered service: $e');
+      if (_verbose) debugPrint('Error handling discovered service: $e');
     }
   }
 
@@ -812,7 +818,7 @@ class DeviceDiscoveryService {
         _devicesController.add(_discoveredDevices.values.toList());
       }
     } catch (e) {
-      if (_verbose) print('Error handling lost service: $e');
+      if (_verbose) debugPrint('Error handling lost service: $e');
     }
   }
 
@@ -827,7 +833,9 @@ class DeviceDiscoveryService {
     // Ignore records missing a usable transfer port
     if (deviceInfo.port <= 0) {
       if (_verbose) {
-        print('Ignoring device without valid port: ${deviceInfo.toJson()}');
+        debugPrint(
+          'Ignoring device without valid port: ${deviceInfo.toJson()}',
+        );
       }
       return;
     }
@@ -851,7 +859,7 @@ class DeviceDiscoveryService {
 
     _discoveredDevices[deviceInfo.id] = deviceInfo;
     _devicesController.add(_discoveredDevices.values.toList());
-    if (_verbose) print('Updated device: ${deviceInfo.toJson()}');
+    if (_verbose) debugPrint('Updated device: ${deviceInfo.toJson()}');
   }
 
   static Future<void> _startCleanupTimer() async {
@@ -866,7 +874,7 @@ class DeviceDiscoveryService {
         final shouldRemove =
             now.difference(device.lastSeen) > _cleanupThreshold;
         if (_verbose && shouldRemove) {
-          print('Removing stale device: ${device.toJson()}');
+          debugPrint('Removing stale device: ${device.toJson()}');
         }
         return shouldRemove;
       });
@@ -882,7 +890,7 @@ class DeviceDiscoveryService {
       try {
         final currentInfo = await _getDeviceInfo();
         if (currentInfo.ip == 'unknown') {
-          print('Network appears to be down, scheduling reconnect...');
+          debugPrint('Network appears to be down, scheduling reconnect...');
           _scheduleReconnect();
         } else {
           // Verify UDP socket is still functional
@@ -900,13 +908,13 @@ class DeviceDiscoveryService {
             }
           } catch (e) {
             if (_verbose) {
-              print('UDP socket test failed, scheduling reconnect...');
+              debugPrint('UDP socket test failed, scheduling reconnect...');
             }
             _scheduleReconnect();
           }
         }
       } catch (e) {
-        if (_verbose) print('Error during network check: $e');
+        if (_verbose) debugPrint('Error during network check: $e');
       }
     });
   }
@@ -988,7 +996,7 @@ class DeviceDiscoveryService {
         }
       }
     } catch (e) {
-      print('Error getting IP address: $e');
+      debugPrint('Error getting IP address: $e');
       ipAddress = 'unknown';
     }
 

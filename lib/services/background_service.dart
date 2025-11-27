@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:device_info_plus/device_info_plus.dart';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import 'package:aedove/services/device_discovery_service.dart';
@@ -53,14 +54,14 @@ class BackgroundService {
       // return true for both granted and limited access.
       final storageOk = await PermissionService.requestStoragePermission();
       if (!storageOk) {
-        print(
+        debugPrint(
           'Warning: storage permission not granted. Receiving files may fail on Android.',
         );
       }
 
       final locationOk = await PermissionService.requestLocationPermission();
       if (!locationOk) {
-        print(
+        debugPrint(
           'Warning: location permission not granted. Device discovery may be limited.',
         );
       }

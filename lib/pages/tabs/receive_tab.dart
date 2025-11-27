@@ -154,8 +154,9 @@ class _ReceiveTabState extends State<ReceiveTab>
     if (Platform.isWindows ||
         Platform.isMacOS ||
         Platform.isLinux ||
-        Platform.isIOS)
+        Platform.isIOS) {
       return;
+    }
 
     try {
       // Check current permission status before requesting
@@ -168,8 +169,9 @@ class _ReceiveTabState extends State<ReceiveTab>
 
       // If both permissions are already granted or limited (limited access is acceptable), don't show any dialog
       if ((storageStatus.isGranted || storageStatus.isLimited) &&
-          (locationStatus.isGranted || locationStatus.isLimited))
+          (locationStatus.isGranted || locationStatus.isLimited)) {
         return;
+      }
 
       // Request permissions
       final storageGranted = await PermissionService.requestStoragePermission();
@@ -250,14 +252,16 @@ class _ReceiveTabState extends State<ReceiveTab>
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
-                    primaryColor.withOpacity(0.1),
-                    primaryColor.withOpacity(0.05),
+                    primaryColor.withValues(alpha: 0.1),
+                    primaryColor.withValues(alpha: 0.05),
                   ],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
                 borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: primaryColor.withOpacity(0.2)),
+                border: Border.all(
+                  color: primaryColor.withAlpha((0.2 * 255).round()),
+                ),
               ),
               child: Row(
                 children: [
@@ -266,7 +270,7 @@ class _ReceiveTabState extends State<ReceiveTab>
                     child: Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: primaryColor.withOpacity(0.2),
+                        color: primaryColor.withValues(alpha: 0.2),
                         shape: BoxShape.circle,
                       ),
                       child: Icon(
@@ -327,7 +331,7 @@ class _ReceiveTabState extends State<ReceiveTab>
                       vertical: 2,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.red.withOpacity(0.1),
+                      color: Colors.red.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
@@ -395,10 +399,10 @@ class _ReceiveTabState extends State<ReceiveTab>
                 decoration: BoxDecoration(
                   color: theme.cardColor,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey.withOpacity(0.1)),
+                  border: Border.all(color: Colors.grey.withValues(alpha: 0.1)),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.03),
+                      color: Colors.black.withValues(alpha: 0.03),
                       blurRadius: 10,
                       offset: const Offset(0, 4),
                     ),
@@ -409,7 +413,7 @@ class _ReceiveTabState extends State<ReceiveTab>
                     Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: Colors.green.withOpacity(0.1),
+                        color: Colors.green.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: const Icon(
@@ -472,7 +476,7 @@ class _ReceiveTabState extends State<ReceiveTab>
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
