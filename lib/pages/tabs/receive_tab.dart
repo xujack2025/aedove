@@ -26,6 +26,7 @@ class _ReceiveTabState extends State<ReceiveTab>
   List<FileTransferRequest> _pendingRequests = [];
   bool _permissionsPromptShown = false;
   String _lastDownloadedPath = '';
+  final Map<String, FileTransferProgress> _activeTransfers = {};
 
   // Animation for the "Listening" pulse effect
   late AnimationController _pulseController;
@@ -43,12 +44,6 @@ class _ReceiveTabState extends State<ReceiveTab>
     );
     _getDeviceInfo();
     _setupStreams();
-  }
-
-  @override
-  void dispose() {
-    _pulseController.dispose();
-    super.dispose();
   }
 
   void _setupStreams() {
@@ -85,6 +80,27 @@ class _ReceiveTabState extends State<ReceiveTab>
         } catch (e) {
           // ignore if scaffold not ready
         }
+      }
+    });
+
+    // Listen to file transfer progress updates
+    FileTransferService.progressStream.listen((progress) {
+      if (mounted) {
+        setState(() {
+          if (progress.status == TransferStatus.completed ||
+              progress.status == TransferStatus.failed) {
+            // Remove from active transfers after completion/failure
+            Future.delayed(const Duration(seconds: 2), () {
+              if (mounted) {
+                setState(() {
+                  _activeTransfers.remove(progress.requestId);
+                });
+              }
+            });
+          } else {
+            _activeTransfers[progress.requestId] = progress;
+          }
+        });
       }
     });
   }
@@ -236,247 +252,480 @@ class _ReceiveTabState extends State<ReceiveTab>
   }
 
   @override
+  void dispose() {
+    _pulseController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final primaryColor = theme.colorScheme.primary;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20.0),
-      child: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const SizedBox(height: 20),
-            // Modern Status Card with pulse animation
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    primaryColor.withValues(alpha: 0.1),
-                    primaryColor.withValues(alpha: 0.05),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(
-                  color: primaryColor.withAlpha((0.2 * 255).round()),
-                ),
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(vertical: 0, horizontal: 24.0),
+      physics: const BouncingScrollPhysics(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const SizedBox(height: 20),
+          // Modern Status Card with pulse animation
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  primaryColor.withValues(alpha: 0.1),
+                  primaryColor.withValues(alpha: 0.05),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
-              child: Row(
-                children: [
-                  ScaleTransition(
-                    scale: _pulseAnimation,
-                    child: Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: primaryColor.withValues(alpha: 0.2),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        Icons.wifi_tethering,
-                        size: 32,
-                        color: primaryColor,
-                      ),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(
+                color: primaryColor.withAlpha((0.2 * 255).round()),
+              ),
+            ),
+            child: Row(
+              children: [
+                ScaleTransition(
+                  scale: _pulseAnimation,
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: primaryColor.withValues(alpha: 0.2),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.wifi_tethering,
+                      size: 32,
+                      color: primaryColor,
                     ),
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _deviceName,
-                          style: theme.textTheme.titleLarge?.copyWith(
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _deviceName,
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(Icons.link, size: 14, color: Colors.grey[600]),
+                          const SizedBox(width: 4),
+                          Text(
+                            _ipAddress,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: Colors.grey[700],
+                              fontFamily: 'monospace',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          // Pending File Transfer Requests
+          if (_pendingRequests.isNotEmpty) ...[
+            // 1. The Header Row
+            Row(
+              children: [
+                // FLEXIBLE TITLE: Takes up remaining space
+                Expanded(
+                  child: Row(
+                    children: [
+                      Flexible(
+                        // Prevents text overflow
+                        child: Text(
+                          'Incoming Requests',
+                          overflow: TextOverflow
+                              .ellipsis, // Adds ... if text is too long
+                          maxLines: 1,
+                          style: theme.textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            Icon(Icons.link, size: 14, color: Colors.grey[600]),
-                            const SizedBox(width: 4),
-                            Text(
-                              _ipAddress,
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: Colors.grey[700],
-                                fontFamily: 'monospace',
-                              ),
-                            ),
-                          ],
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
                         ),
-                      ],
-                    ),
+                        decoration: BoxDecoration(
+                          color: Colors.red.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          '${_pendingRequests.length}',
+                          style: const TextStyle(
+                            color: Colors.red,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 24),
-
-            // Pending File Transfer Requests
-            if (_pendingRequests.isNotEmpty) ...[
-              Row(
-                children: [
-                  Text(
-                    'Incoming Requests',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
+                ),
+                // BULK ACTIONS (Only show if > 1)
+                if (_pendingRequests.length > 1) ...[
+                  const SizedBox(width: 8),
+                  // Accept Button -> Compact Filled Button
+                  FilledButton.icon(
+                    onPressed: _acceptAllFiles,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: Colors.green, // Distinct positive action
+                      foregroundColor: Colors.white,
+                      visualDensity:
+                          VisualDensity.compact, // Reduces vertical height
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 0,
+                      ),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    icon: const Icon(Icons.done_all, size: 16),
+                    label: const Text(
+                      "Accept All",
+                      style: TextStyle(fontSize: 12),
                     ),
                   ),
                   const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 2,
+                  // Decline Button -> Converted to Icon to save space
+                  IconButton(
+                    onPressed: _denyAllFiles,
+                    tooltip: "Decline All",
+                    icon: Icon(
+                      Icons.delete_outline,
+                      color: Colors.red[300],
+                      size: 22,
                     ),
-                    decoration: BoxDecoration(
-                      color: Colors.red.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      '${_pendingRequests.length}',
-                      style: const TextStyle(
-                        color: Colors.red,
-                        fontWeight: FontWeight.bold,
-                      ),
+                    style: IconButton.styleFrom(
+                      padding: EdgeInsets.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      visualDensity: VisualDensity.compact,
                     ),
                   ),
                 ],
-              ),
-              const SizedBox(height: 12),
-              ListView.separated(
+              ],
+            ),
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+              child: ListView.separated(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 itemCount: _pendingRequests.length,
                 separatorBuilder: (context, index) =>
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 16),
                 itemBuilder: (context, index) {
                   final request = _pendingRequests[index];
                   return _buildRequestCard(request, theme);
                 },
               ),
-            ] else ...[
-              // Empty State
-              Container(
-                padding: const EdgeInsets.symmetric(vertical: 40),
-                alignment: Alignment.center,
-                child: Column(
-                  children: [
-                    Icon(
-                      Icons.move_to_inbox_rounded,
-                      size: 64,
-                      color: Colors.grey[300],
+            ),
+          ] else ...[
+            // Empty State
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 40),
+              alignment: Alignment.center,
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.move_to_inbox_rounded,
+                    size: 64,
+                    color: Colors.grey[300],
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Waiting for files...',
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      color: Colors.grey[500],
                     ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Waiting for files...',
-                      style: theme.textTheme.bodyLarge?.copyWith(
-                        color: Colors.grey[500],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Ask the sender to select your device',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: Colors.grey[400],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
+          const SizedBox(height: 24),
+
+          // Active file transfers
+          if (_activeTransfers.isNotEmpty) ...[
+            Row(
+              children: [
+                Text(
+                  'Downloading',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '${_activeTransfers.length}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.blue[700],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: _activeTransfers.length,
+              separatorBuilder: (context, index) => const SizedBox(height: 12),
+              itemBuilder: (context, index) {
+                final progress = _activeTransfers.values.elementAt(index);
+                return _buildProgressCard(progress, theme);
+              },
+            ),
+            const SizedBox(height: 24),
+          ],
+
+          // Last downloaded file path
+          if (_lastDownloadedPath.isNotEmpty)
+            InkWell(
+              onTap: () => _openFile(_lastDownloadedPath),
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                decoration: BoxDecoration(
+                  color: theme.cardColor,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.withValues(alpha: 0.1)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.03),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.green.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(
+                        Icons.check_circle_outline,
+                        color: Colors.green,
+                        size: 20,
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Last Received',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: Colors.grey,
+                            ),
+                          ),
+                          Text(
+                            _lastDownloadedPath.split('/').last,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Icon(Icons.open_in_new, size: 18, color: Colors.grey[600]),
+                  ],
+                ),
+              ),
+            ),
+
+          // Auto-receive toggle
+          // Card(
+          //   child: SwitchListTile(
+          //     title: const Text('Auto-receive files'),
+          //     subtitle: const Text(
+          //       'Automatically accept files from trusted devices',
+          //     ),
+          //     value: _isReceiving,
+          //     onChanged: (value) {
+          //       setState(() {
+          //         _isReceiving = value;
+          //       });
+          //     },
+          //   ),
+          // ),
+        ],
+      ),
+    );
+  }
+
+  // Progress card for active transfers
+  Widget _buildProgressCard(FileTransferProgress progress, ThemeData theme) {
+    final Color statusColor = progress.status == TransferStatus.completed
+        ? Colors.green
+        : progress.status == TransferStatus.failed
+        ? Colors.red
+        : Colors.blue;
+
+    final IconData statusIcon = progress.status == TransferStatus.completed
+        ? Icons.check_circle
+        : progress.status == TransferStatus.failed
+        ? Icons.error
+        : Icons.downloading;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.cardColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: statusColor.withValues(alpha: 0.3), width: 2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(statusIcon, color: statusColor, size: 24),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     Text(
-                      'Ask the sender to select your device',
+                      progress.fileName,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _formatFileSize(progress.totalBytes),
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: Colors.grey[400],
+                        color: Colors.grey[600],
                       ),
                     ),
                   ],
                 ),
               ),
-            ],
-
-            const SizedBox(height: 24),
-
-            // Last downloaded file path
-            if (_lastDownloadedPath.isNotEmpty)
-              InkWell(
-                onTap: () => _openFile(_lastDownloadedPath),
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
-                  decoration: BoxDecoration(
-                    color: theme.cardColor,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: Colors.grey.withValues(alpha: 0.1),
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.03),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.green.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Icon(
-                          Icons.check_circle_outline,
-                          color: Colors.green,
-                          size: 20,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Last Received',
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                color: Colors.grey,
-                              ),
-                            ),
-                            Text(
-                              _lastDownloadedPath.split('/').last,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Icon(
-                        Icons.open_in_new,
-                        size: 18,
-                        color: Colors.grey[600],
-                      ),
-                    ],
+              if (progress.status == TransferStatus.transferring)
+                Text(
+                  progress.progressPercent,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: statusColor,
                   ),
                 ),
+            ],
+          ),
+          if (progress.status == TransferStatus.transferring) ...[
+            const SizedBox(height: 12),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: LinearProgressIndicator(
+                value: progress.progress,
+                minHeight: 8,
+                backgroundColor: Colors.grey[200],
+                valueColor: AlwaysStoppedAnimation<Color>(statusColor),
               ),
-
-            // Auto-receive toggle
-            // Card(
-            //   child: SwitchListTile(
-            //     title: const Text('Auto-receive files'),
-            //     subtitle: const Text(
-            //       'Automatically accept files from trusted devices',
-            //     ),
-            //     value: _isReceiving,
-            //     onChanged: (value) {
-            //       setState(() {
-            //         _isReceiving = value;
-            //       });
-            //     },
-            //   ),
-            // ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  '${_formatFileSize(progress.transferredBytes)} of ${_formatFileSize(progress.totalBytes)}',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: Colors.grey[600],
+                  ),
+                ),
+                if (progress.estimatedTimeRemaining != null)
+                  Text(
+                    _formatDuration(progress.estimatedTimeRemaining!),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: statusColor,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+              ],
+            ),
           ],
-        ),
+          if (progress.status == TransferStatus.completed)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                'Transfer complete!',
+                style: TextStyle(
+                  color: Colors.green[700],
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          if (progress.status == TransferStatus.failed)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                'Transfer failed: ${progress.errorMessage ?? "Unknown error"}',
+                style: TextStyle(color: Colors.red[700], fontSize: 12),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -633,6 +882,42 @@ class _ReceiveTabState extends State<ReceiveTab>
     // );
   }
 
+  void _acceptAllFiles() {
+    final requestIds = _pendingRequests.map((r) => r.id).toList();
+    for (final requestId in requestIds) {
+      FileTransferService.acceptFileTransfer(requestId);
+    }
+    setState(() {
+      _pendingRequests.clear();
+    });
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Accepting ${requestIds.length} files...'),
+        backgroundColor: Colors.green,
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  void _denyAllFiles() {
+    final requestIds = _pendingRequests.map((r) => r.id).toList();
+    for (final requestId in requestIds) {
+      FileTransferService.denyFileTransfer(requestId);
+    }
+    setState(() {
+      _pendingRequests.clear();
+    });
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Declined ${requestIds.length} files'),
+        backgroundColor: Colors.red,
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
   String _formatFileSize(int bytes) {
     if (bytes < 1024) return '$bytes B';
     if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
@@ -640,6 +925,16 @@ class _ReceiveTabState extends State<ReceiveTab>
       return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
     }
     return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
+  }
+
+  String _formatDuration(Duration duration) {
+    if (duration.inHours > 0) {
+      return '${duration.inHours}h ${duration.inMinutes.remainder(60)}m';
+    } else if (duration.inMinutes > 0) {
+      return '${duration.inMinutes}m ${duration.inSeconds.remainder(60)}s';
+    } else {
+      return '${duration.inSeconds}s';
+    }
   }
 
   Future<void> _openFile(String filePath) async {

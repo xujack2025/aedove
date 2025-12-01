@@ -43,7 +43,7 @@ class MediaStoreService {
   static Future<String?> saveToGallery(String fileName, List<int> bytes) async {
     try {
       // Only attempt gallery operations on supported platforms
-      if (!(Platform.isAndroid || Platform.isIOS || Platform.isMacOS)) {
+      if (!(Platform.isAndroid || Platform.isIOS)) {
         return null;
       }
 
