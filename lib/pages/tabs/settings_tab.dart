@@ -317,7 +317,7 @@ class _SettingsTabState extends State<SettingsTab> {
                   'Version',
                   style: TextStyle(fontWeight: FontWeight.w500),
                 ),
-                subtitle: const Text('1.0.3'),
+                subtitle: const Text('1.1.0'),
               ),
               const Divider(height: 24),
               ListTile(

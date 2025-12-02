@@ -58,7 +58,7 @@ class _HomePageState extends State<HomePage>
 
   // ========================= ADS =========================
   // DEV MODE: Set to false to disable ads during development
-  static const bool _enableAds = false;
+  static const bool _enableAds = true;
 
   // ignore: unused_field
   bool _isExpanded = true;
