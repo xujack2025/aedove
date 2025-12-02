@@ -4,10 +4,10 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:network_info_plus/network_info_plus.dart';
 import 'package:aedove/services/device_discovery_service.dart';
 import 'package:aedove/services/file_transfer_service.dart';
+import 'package:aedove/services/media_store_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:aedove/services/permission_service.dart';
 import 'package:permission_handler/permission_handler.dart' as ph;
-import 'package:open_file/open_file.dart';
 
 class ReceiveTab extends StatefulWidget {
   const ReceiveTab({super.key});
@@ -55,7 +55,10 @@ class _ReceiveTabState extends State<ReceiveTab>
     FileTransferService.requestsStream.listen((requests) {
       if (mounted) {
         setState(() {
-          _pendingRequests = requests;
+          // Filter out requests that are already being transferred
+          _pendingRequests = requests.where((request) {
+            return !_activeTransfers.containsKey(request.id);
+          }).toList();
         });
       }
     });
@@ -555,23 +558,27 @@ class _ReceiveTabState extends State<ReceiveTab>
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Last Received',
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: Colors.grey,
-                            ),
-                          ),
-                          Text(
                             _lastDownloadedPath.split('/').last,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.w500,
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            _getShortPath(_lastDownloadedPath),
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: Colors.grey[600],
+                              fontSize: 11,
                             ),
                           ),
                         ],
                       ),
                     ),
-                    Icon(Icons.open_in_new, size: 18, color: Colors.grey[600]),
+                    Icon(Icons.folder_open, size: 18, color: Colors.grey[600]),
                   ],
                 ),
               ),
@@ -967,10 +974,113 @@ class _ReceiveTabState extends State<ReceiveTab>
         return;
       }
 
-      // Try opening with OpenFile for regular files
-      final result = await OpenFile.open(filePath);
-      if (result.type != ResultType.done && mounted) {
-        _showOpenError('Could not open file: ${result.message}');
+      // Show dialog with options
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (dialogContext) {
+            final dialogTheme = Theme.of(dialogContext);
+            return Dialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Header with icon
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: dialogTheme.colorScheme.primary.withValues(
+                          alpha: 0.1,
+                        ),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.insert_drive_file_rounded,
+                        size: 40,
+                        color: dialogTheme.colorScheme.primary,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    // Title
+                    Text(
+                      'Open File',
+                      style: dialogTheme.textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    // Subtitle
+                    Text(
+                      'Choose how you want to access this file',
+                      style: dialogTheme.textTheme.bodyMedium?.copyWith(
+                        color: Colors.grey[600],
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 24),
+                    // Action buttons
+                    _buildActionButton(
+                      icon: Icons.folder_open_rounded,
+                      label: 'Show in Folder',
+                      subtitle: 'View file location',
+                      color: Colors.blue,
+                      onTap: () async {
+                        Navigator.of(dialogContext).pop();
+                        final success =
+                            await MediaStoreService.showInFileManager(filePath);
+                        if (!success && mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Could not open file manager'),
+                              backgroundColor: Colors.orange,
+                            ),
+                          );
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    _buildActionButton(
+                      icon: Icons.open_in_new_rounded,
+                      label: 'Open File',
+                      subtitle: 'Launch with default app',
+                      color: Colors.green,
+                      onTap: () async {
+                        Navigator.of(dialogContext).pop();
+                        final success = await MediaStoreService.openFile(
+                          filePath,
+                        );
+                        if (!success && mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Could not open file'),
+                              backgroundColor: Colors.orange,
+                            ),
+                          );
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    // Cancel button
+                    TextButton(
+                      onPressed: () => Navigator.of(dialogContext).pop(),
+                      style: TextButton.styleFrom(
+                        minimumSize: const Size(double.infinity, 48),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: const Text('Cancel'),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
       }
     } catch (e) {
       debugPrint('Error opening file: $e');
@@ -984,5 +1094,69 @@ class _ReceiveTabState extends State<ReceiveTab>
         SnackBar(content: Text(message), backgroundColor: Colors.orange),
       );
     }
+  }
+
+  Widget _buildActionButton({
+    required IconData icon,
+    required String label,
+    required String subtitle,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          border: Border.all(color: color.withValues(alpha: 0.3), width: 2),
+          borderRadius: BorderRadius.circular(16),
+          color: color.withValues(alpha: 0.05),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: color, size: 28),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey[400]),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Get shortened path showing only last 4-5 parts (e.g., "Documents/file.txt")
+  String _getShortPath(String fullPath) {
+    final parts = fullPath.split('/');
+    if (parts.length <= 5) {
+      return fullPath;
+    }
+    // Return last 5 parts: folder/subfolder/file.txt
+    return parts.sublist(parts.length - 5).join('/');
   }
 }
