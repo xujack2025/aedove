@@ -11,12 +11,11 @@ void main() async {
   // Configure system UI for edge-to-edge on Android 15+
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
 
-  // Make system bars transparent for edge-to-edge
+  // Set system UI overlay style for edge-to-edge
+  // Note: Setting colors to transparent is handled by enableEdgeToEdge() in MainActivity
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
       statusBarIconBrightness: Brightness.dark,
-      systemNavigationBarColor: Colors.transparent,
       systemNavigationBarIconBrightness: Brightness.dark,
     ),
   );

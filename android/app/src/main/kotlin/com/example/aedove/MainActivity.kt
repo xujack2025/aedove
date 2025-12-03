@@ -14,11 +14,11 @@ class MainActivity : FlutterActivity() {
     private var wakeLock: PowerManager.WakeLock? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        // Enable edge-to-edge for Android 15+ compatibility
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
-            WindowCompat.setDecorFitsSystemWindows(window, false)
-        }
         super.onCreate(savedInstanceState)
+        
+        // Enable edge-to-edge for backward compatibility with Android 15+
+        // This ensures proper handling of system bars without deprecated color APIs
+        WindowCompat.setDecorFitsSystemWindows(window, false)
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
