@@ -453,12 +453,17 @@ class FileTransferService {
             // Notify user
             if (_pendingRequests.containsKey(requestId)) {
               final tr = _pendingRequests[requestId]!;
-              await NotificationService.showFileReceivedNotification(
-                fileName: tr.fileName,
-                fileSize: _formatFileSize(tr.fileSize),
-                filePath: filePath,
-                isIOS: Platform.isIOS,
-              );
+              try {
+                await NotificationService.showFileReceivedNotification(
+                  fileName: tr.fileName,
+                  fileSize: _formatFileSize(tr.fileSize),
+                  filePath: filePath,
+                  isIOS: Platform.isIOS,
+                );
+              } catch (e) {
+                debugPrint('Error showing file received notification: $e');
+                // Don't fail the transfer if notification fails
+              }
               _pendingRequests.remove(requestId);
               _requestsController.add(_pendingRequests.values.toList());
               // Emit saved file path for UI listeners
@@ -466,12 +471,17 @@ class FileTransferService {
                 _fileSavedController.add(filePath);
               } catch (_) {}
             } else {
-              await NotificationService.showFileReceivedNotification(
-                fileName: fileName,
-                fileSize: _formatFileSize(bytes.length),
-                filePath: filePath,
-                isIOS: Platform.isIOS,
-              );
+              try {
+                await NotificationService.showFileReceivedNotification(
+                  fileName: fileName,
+                  fileSize: _formatFileSize(bytes.length),
+                  filePath: filePath,
+                  isIOS: Platform.isIOS,
+                );
+              } catch (e) {
+                debugPrint('Error showing file received notification: $e');
+                // Don't fail the transfer if notification fails
+              }
               try {
                 _fileSavedController.add(filePath);
               } catch (_) {}
