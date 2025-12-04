@@ -22,12 +22,14 @@ Aedove lets you quickly send and receive files between devices on the same netwo
 - `lib/`
 	- `pages/tabs/send_tab.dart` – Select files/media and send to devices
 	- `pages/tabs/receive_tab.dart` – Receive requests and manage permissions
+	- `pages/tabs/settings_tab.dart` – App settings and configuration
 	- `services/`
 		- `device_discovery_service.dart` – LAN discovery and device registry
 		- `file_transfer_service.dart` – File send/receive flows
 		- `media_store_service.dart` – Facade for saving files cross‑platform
 		- `permission_service.dart` – Runtime permissions
 		- `notification_service.dart` – Local notifications (where supported)
+		- `background_service.dart` – Background task management
 
 ## Getting started
 
@@ -69,14 +71,6 @@ Common device targets:
 - Desktop build requires Visual Studio 2022 with “Desktop development with C++” and Windows SDK.
 - Icons and product metadata are configured under `windows/runner`.
 
-### Linux (e.g., Ubuntu)
-- Install build deps: `sudo apt-get install clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev`
-- Then `flutter config --enable-linux-desktop` and run.
-
-### Web (Chrome)
-- Received files are saved via standard browser download.
-- Browsers cannot run a local server or broadcast on the LAN; auto‑discovery is limited.
-
 ## Permissions and configuration
 
 This project uses `permission_handler` and declares platform permissions as needed.
@@ -99,27 +93,13 @@ flutter build apk   # or: flutter build appbundle
 
 iOS (on macOS):
 ```
-flutter build ios
+flutter build ipa
 ```
+Then open Xcode to archive and distribute, or use the generated .ipa file.
 
 macOS:
 ```
 flutter build macos
-```
-
-Windows:
-```
-flutter build windows
-```
-
-Linux:
-```
-flutter build linux
-```
-
-Web:
-```
-flutter build web
 ```
 
 ## Troubleshooting
@@ -131,7 +111,8 @@ flutter build web
 ## Tech stack
 
 - Flutter, Dart
-- Packages: file_picker, image_picker, permission_handler, path_provider, mime, gal, connectivity_plus, network_info_plus, device_info_plus, bonsoir, socket_io_client, intl, image
+- Packages: file_picker, image_picker, permission_handler, path_provider, mime, gal, connectivity_plus, network_info_plus, device_info_plus, bonsoir, socket_io_client, intl, image, awesome_notifications, flutter_inappwebview, url_launcher, open_file
+
 
 ## Contributing
 
