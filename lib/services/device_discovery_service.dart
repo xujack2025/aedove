@@ -53,7 +53,9 @@ class DeviceDiscoveryService {
   static const int _mdnsPort = 53317; // Port for mDNS service
   static const int _udpPort = 53318; // Separate port for UDP broadcast
   static const int _broadcastInterval = 30; // seconds
-  static const Duration _cleanupThreshold = Duration(minutes: 5);
+  static const Duration _cleanupThreshold = Duration(
+    seconds: 45,
+  ); // 1.5x broadcast interval to avoid premature cleanup
   static const Duration _reconnectDelay = Duration(seconds: 5);
   static final bool _verbose = false; // set to true to enable detailed logs
 
@@ -132,6 +134,9 @@ class DeviceDiscoveryService {
     _isStarted = false;
 
     try {
+      // Send goodbye message to notify other devices we're going offline
+      await _sendGoodbyeMessage();
+
       // Stop broadcast service with timeout
       if (_broadcast != null) {
         try {
@@ -218,7 +223,7 @@ class DeviceDiscoveryService {
 
       // Create the service with a unique name and file transfer port
       final service = BonsoirService(
-        name: '${deviceInfo.name}_${deviceInfo.id.substring(0, 8)}',
+        name: deviceInfo.name,
         type: _serviceType,
         port:
             FileTransferService.getServerPort(), // Advertise actual file transfer port
@@ -401,7 +406,10 @@ class DeviceDiscoveryService {
 
           final device = DeviceInfo(
             id: id,
-            name: instance.split('._').first,
+            name: instance
+                .split('._')
+                .first
+                .split('_')[0], // Remove device ID suffix if present
             ip: resolvedIp,
             port: tport,
             lastSeen: DateTime.now(),
@@ -468,7 +476,10 @@ class DeviceDiscoveryService {
           if (resolvedIp == null || resolvedIp.isEmpty || tport <= 0) continue;
           final device = DeviceInfo(
             id: id,
-            name: instance.split('._').first,
+            name: instance
+                .split('._')
+                .first
+                .split('_')[0], // Remove device ID suffix if present
             ip: resolvedIp,
             port: tport,
             lastSeen: DateTime.now(),
@@ -694,6 +705,19 @@ class DeviceDiscoveryService {
         return;
       }
 
+      if (type == 'goodbye') {
+        // Device is going offline, remove it immediately
+        final deviceId = data['data']?['id'];
+        if (deviceId != null && deviceId != _currentDeviceId) {
+          _discoveredDevices.remove(deviceId);
+          _devicesController.add(_discoveredDevices.values.toList());
+          if (_verbose) {
+            debugPrint('Device $deviceId said goodbye, removed from list');
+          }
+        }
+        return;
+      }
+
       if (type == 'discovery' || type == 'discovery_response') {
         final deviceInfo = DeviceInfo.fromJson(data['data']);
 
@@ -734,6 +758,41 @@ class DeviceDiscoveryService {
       if (_verbose) debugPrint('Sent UDP response to ${address.address}:$port');
     } catch (e) {
       if (_verbose) debugPrint('Error sending UDP response: $e');
+    }
+  }
+
+  static Future<void> _sendGoodbyeMessage() async {
+    try {
+      final deviceInfo = await _getDeviceInfo();
+      if (deviceInfo.ip == 'unknown') return;
+
+      final message = jsonEncode({
+        'type': 'goodbye',
+        'data': {'id': deviceInfo.id},
+      });
+
+      // Broadcast goodbye message to notify all devices
+      if (!Platform.isIOS) {
+        final parts = deviceInfo.ip.split('.');
+        if (parts.length == 4) {
+          final networkBase = '${parts[0]}.${parts[1]}.${parts[2]}';
+
+          // Send to subnet broadcast
+          try {
+            _udpSocket?.send(
+              utf8.encode(message),
+              InternetAddress('$networkBase.255'),
+              _udpPort,
+            );
+          } catch (e) {
+            if (_verbose) debugPrint('Failed to send goodbye broadcast: $e');
+          }
+        }
+      }
+
+      debugPrint('Sent goodbye message to network');
+    } catch (e) {
+      debugPrint('Error sending goodbye message: $e');
     }
   }
 
@@ -794,7 +853,7 @@ class DeviceDiscoveryService {
 
       final deviceInfo = DeviceInfo(
         id: serviceId,
-        name: service.name,
+        name: service.name.split('_')[0], // Remove device ID suffix if present
         ip: serviceIp,
         port: port,
         lastSeen: DateTime.now(),

@@ -375,29 +375,38 @@ class _SendTabState extends State<SendTab> {
                       ),
                       const SizedBox(height: 12),
                       SizedBox(
-                        height: 140,
+                        height:
+                            180, // 1. Increased height slightly to accommodate the padding
                         child: ListView.builder(
                           scrollDirection: Axis.horizontal,
                           physics: const BouncingScrollPhysics(),
+                          // 2. Allow shadows to paint outside the scroll view bounds
+                          clipBehavior: Clip.none,
+                          // 3. Add padding around the entire list so the first/last items
+                          // and top/bottom shadows aren't cut off
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 12,
+                          ),
                           itemCount: _selectedFiles.length,
                           itemBuilder: (context, index) {
                             final file = _selectedFiles[index];
                             return Container(
                               width: 110,
-                              margin: const EdgeInsets.only(
-                                right: 12,
-                                bottom: 4,
-                              ),
+                              // 4. Removed 'bottom' margin (handled by ListView padding now)
+                              // Kept 'right' margin to separate items from each other
+                              margin: const EdgeInsets.only(right: 12),
                               decoration: BoxDecoration(
                                 color: Theme.of(context).cardColor,
                                 borderRadius: BorderRadius.circular(16),
                                 boxShadow: [
                                   BoxShadow(
                                     color: Colors.black.withAlpha(
-                                      (0.05 * 255).round(),
+                                      (0.1 * 255).round(),
                                     ),
-                                    blurRadius: 10,
-                                    offset: const Offset(0, 4),
+                                    blurRadius: 8,
+                                    spreadRadius: 0,
+                                    offset: const Offset(0, 2),
                                   ),
                                 ],
                               ),
@@ -469,7 +478,7 @@ class _SendTabState extends State<SendTab> {
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withAlpha((0.05 * 255).round()),
+                        color: Colors.black.withAlpha((0.1 * 255).round()),
                         blurRadius: 10,
                         offset: const Offset(0, 2),
                       ),
@@ -485,7 +494,7 @@ class _SendTabState extends State<SendTab> {
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(
-                        Icons.computer_rounded,
+                        Icons.devices_rounded,
                         color: Colors.indigo,
                       ),
                     ),

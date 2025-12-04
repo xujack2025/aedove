@@ -56,22 +56,27 @@ class _HomePageState extends State<HomePage>
   // ignore: unused_field
   InAppWebViewController? _adWebViewController;
 
-  // ========================= ADS =========================
-  // DEV MODE: Set to false to disable ads during development
-  static const bool _enableAds = false;
+  void _reloadWebViewAD() {
+    if (_adWebViewController != null) {
+      _adWebViewController!.loadUrl(urlRequest: URLRequest(url: WebUri(_popupBannerLink)));
+    }
+  }
 
-  // ignore: unused_field
-  bool _isExpanded = true;
-  bool _naviPlayVisibility = _enableAds;
+  // ========================= ADS =========================
+  final bool _loginStop = false;
+  bool _isExpandedAd = true;
+  bool _naviPlayVisibility = true;
   bool _popupAlive = true;
+
   Timer? _visibleTimer;
   Timer? _hiddenTimer;
 
   late List adLinkDurationData;
   int adLinksIndex = 0;
-  bool _navistatus = false;
-  String _popupBannerLink = Constant.AD_URL;
-  final String _durationAPILink = Constant.AD_API;
+  bool _adnavistatus = false;
+
+  late String _popupBannerLink = Constant.AD_URL;
+  String durationAPILink = Constant.AD_API;
 
   @override
   void initState() {
@@ -82,53 +87,36 @@ class _HomePageState extends State<HomePage>
   }
 
   // ========================= ADS FLOW (FETCH, ROTATE, TIMERS) =========================
-
-  void _reloadWebViewAD() {
-    if (_adWebViewController != null) {
-      _adWebViewController!.loadUrl(
-        urlRequest: URLRequest(url: WebUri(_popupBannerLink)),
-      );
-    }
-  }
-
   void _toggleNaviPlay() {
-    setState(() {
-      _naviPlayVisibility = false;
-      _popupAlive = !_popupAlive;
-      if (_popupAlive == true) {
-        _isExpanded = true;
-        _naviPlayVisibility = true;
-      }
-    });
+    if (!_loginStop) {
+      setState(() {
+        _naviPlayVisibility = false;
+        _popupAlive = !_popupAlive;
+        if (_popupAlive == true) {
+          _isExpandedAd = true;
+          _naviPlayVisibility = true;
+        }
+      });
+    }
   }
 
   Future<void> _fetchLinkDuration() async {
-    // Skip ads if disabled in dev mode
-    if (!_enableAds) {
-      setState(() {
-        _navistatus = false;
-      });
-      return;
-    }
-
     try {
-      final responseData = await http.get(Uri.parse(_durationAPILink));
+      final responseData = await http.get(Uri.parse(durationAPILink));
       if (responseData.statusCode == 200) {
         final jsonData = jsonDecode(responseData.body);
         adLinkDurationData = jsonData['advertisements'];
         if (adLinkDurationData.isEmpty) {
-          if (kDebugMode) {
-            print("Stopping Ads 1");
-          }
+          print("Stopping Ads 1");
           adLinkDurationData = [];
           setState(() {
-            _navistatus = false;
+            _adnavistatus = false;
           });
           _hiddenTimer?.cancel();
           _visibleTimer?.cancel();
-        } else if (_navistatus == false && adLinkDurationData.isNotEmpty) {
+        } else if (_adnavistatus == false && adLinkDurationData.isNotEmpty) {
           setState(() {
-            _navistatus = true;
+            _adnavistatus = true;
           });
           _linkChanger();
         } else {
@@ -136,9 +124,7 @@ class _HomePageState extends State<HomePage>
         }
       }
     } catch (e) {
-      if (kDebugMode) {
-        print("error occured: $e");
-      }
+      print("error occured: $e");
     }
   }
 
@@ -146,8 +132,8 @@ class _HomePageState extends State<HomePage>
     if (adLinkDurationData.isNotEmpty) {
       Map<String, dynamic> bannerItem = adLinkDurationData[adLinksIndex];
       String link = bannerItem['link'];
-      int showDuration = (bannerItem['show']);
-      int hideDuration = (bannerItem['hide']);
+      int show_duration = (bannerItem['show']);
+      int hide_duration = (bannerItem['hide']);
       _popupBannerLink = link;
       _reloadWebViewAD();
       if (_adWebViewController != null) {
@@ -155,13 +141,11 @@ class _HomePageState extends State<HomePage>
           urlRequest: URLRequest(url: WebUri(_popupBannerLink)),
         );
       }
-      _visibleADTimer(showDuration, hideDuration);
+      _visibleADTimer(show_duration, hide_duration);
     } else {
-      if (kDebugMode) {
-        print("Stopping Ads 2");
-      }
+      print("Stopping Ads 2");
       adLinkDurationData = [];
-      _navistatus = false;
+      _adnavistatus = false;
       _hiddenTimer?.cancel();
       _visibleTimer?.cancel();
     }
@@ -169,43 +153,43 @@ class _HomePageState extends State<HomePage>
 
   void _visibleADTimer(int timerDuration, int hidetimerDuration) {
     _reloadWebViewAD();
-    if (kDebugMode) {
-      print("Showing: $timerDuration");
-    }
+    print("Showing: $timerDuration");
     _hiddenTimer?.cancel();
     _visibleTimer = Timer.periodic(Duration(seconds: timerDuration), (timer) {
-      _toggleNaviPlay();
-      _hiddenADTimer(hidetimerDuration);
+      if (!_loginStop) {
+        _toggleNaviPlay();
+        _hiddenADTimer(hidetimerDuration);
+      }
     });
   }
 
   void _hiddenADTimer(int hidetimerDuration) {
-    if (kDebugMode) {
-      print("Hiding Timer Duration: $hidetimerDuration");
-    }
-    _isExpanded = false;
+    print("Hiding: $hidetimerDuration");
+    _isExpandedAd = false;
     _visibleTimer?.cancel();
     _hiddenTimer = Timer.periodic(Duration(seconds: hidetimerDuration), (
       timer,
     ) {
-      _toggleNaviPlay();
-      adLinksIndex++;
-      if (adLinksIndex == adLinkDurationData.length) {
-        _fetchLinkDuration();
-        adLinksIndex = 0;
-      } else {
-        _linkChanger();
+      if (!_loginStop) {
+        _toggleNaviPlay();
+        adLinksIndex++;
+        if (adLinksIndex == adLinkDurationData.length) {
+          _fetchLinkDuration();
+          adLinksIndex = 0;
+        } else {
+          _linkChanger();
+        }
+        _hiddenTimer?.cancel();
       }
-      _hiddenTimer?.cancel();
     });
   }
 
-  void _toggleExpanded() {
+  void _toggleExpandedAd() {
     setState(() {
-      _isExpanded = !_isExpanded;
+      _isExpandedAd = !_isExpandedAd;
       if (_naviPlayVisibility == true) {
         _naviPlayVisibility = false;
-      } else if (_isExpanded == true) {
+      } else if (_isExpandedAd == true) {
         _naviPlayVisibility = true;
       }
     });
@@ -404,113 +388,55 @@ class _HomePageState extends State<HomePage>
           ),
 
           // Animated ad banner at the bottom
-          if (_naviPlayVisibility)
-            AnimatedPositioned(
-              duration: const Duration(milliseconds: 300),
-              bottom: 0,
-              left: 0,
-              right: 0,
-              height: MediaQuery.of(context).size.height * 0.20,
-              child: Container(
-                decoration: BoxDecoration(
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withAlpha((0.1 * 255).round()),
-                      blurRadius: 10,
-                      offset: const Offset(0, -2),
+          // ---- Ads Section ----
+          AnimatedPositioned(
+            duration: const Duration(milliseconds: 350),
+            bottom: 0,
+            left: 0,
+            right: 0,
+            height: _adnavistatus
+                ? _naviPlayVisibility
+                      ? MediaQuery.of(context).size.height * 0.20
+                      : 0
+                : 0,
+            child: _naviPlayVisibility
+                ? Container(
+                    color: Colors.black, // backgroundColor replacement
+                    child: InAppWebView(
+                      initialUrlRequest: URLRequest(
+                        url: WebUri(_popupBannerLink),
+                      ),
+                      initialSettings: InAppWebViewSettings(
+                        javaScriptEnabled: true,
+                        allowsBackForwardNavigationGestures: false,
+                        transparentBackground: false,
+                      ),
+                      onWebViewCreated: (controller) {
+                        _adWebViewController = controller;
+                      },
+                      shouldOverrideUrlLoading: (controller, action) async {
+                        final url = action.request.url;
+                        if (url == null) return NavigationActionPolicy.CANCEL;
+
+                        // Keep your redirect logic
+                        if (url.toString().contains("AEDOVE-AD-Redirect")) {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) =>
+                                  WebViewPage(url: url.toString()),
+                            ),
+                          );
+                          await _adWebViewController?.reload();
+                          return NavigationActionPolicy.CANCEL;
+                        }
+
+                        return NavigationActionPolicy.ALLOW;
+                      },
                     ),
-                  ],
-                ),
-                child: InAppWebView(
-                  initialUrlRequest: URLRequest(url: WebUri(_popupBannerLink)),
-                  initialSettings: InAppWebViewSettings(
-                    javaScriptEnabled: true,
-                    supportZoom: false,
-                    disableHorizontalScroll: true,
-                    disableVerticalScroll: true,
-                    transparentBackground: true,
-                    // Add these settings to prevent keyboard popup
-                    disableContextMenu: true,
-                    // iOS specific settings
-                    allowsInlineMediaPlayback: true,
-                    suppressesIncrementalRendering: true,
-                  ),
-                  onWebViewCreated: (controller) {
-                    _adWebViewController = controller;
-
-                    // Inject JavaScript to prevent all input focus
-                    controller.evaluateJavascript(
-                      source: """
-                        (function() {
-                          // Prevent focus on all input elements
-                          document.addEventListener('click', function(e) {
-                            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              e.target.blur();
-                              return false;
-                            }
-                          }, true);
-                          
-                          document.addEventListener('touchstart', function(e) {
-                            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              e.target.blur();
-                              return false;
-                            }
-                          }, true);
-                          
-                          document.addEventListener('focus', function(e) {
-                            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
-                              e.target.blur();
-                            }
-                          }, true);
-                        })();
-                      """,
-                    );
-                  },
-                  shouldOverrideUrlLoading: (controller, action) async {
-                    final url = action.request.url;
-                    if (url == null) return NavigationActionPolicy.CANCEL;
-
-                    // Keep your redirect logic
-                    if (url.toString().contains("RS-AD-Redirect")) {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) =>
-                              WebViewPage(url: url.toString()),
-                        ),
-                      );
-                      await _adWebViewController?.reload();
-                      return NavigationActionPolicy.CANCEL;
-                    }
-
-                    return NavigationActionPolicy.ALLOW;
-                  },
-                  onLoadStop: (controller, url) async {
-                    // Remove focus from any input fields after page loads
-                    await controller.evaluateJavascript(
-                      source: """
-                        (function() {
-                          var inputs = document.querySelectorAll('input, textarea');
-                          inputs.forEach(function(input) {
-                            input.setAttribute('readonly', 'readonly');
-                            input.setAttribute('disabled', 'disabled');
-                            input.style.pointerEvents = 'none';
-                            input.blur();
-                          });
-                          if (document.activeElement) {
-                            document.activeElement.blur();
-                          }
-                        })();
-                      """,
-                    );
-                  },
-                ),
-              ),
-            ),
+                  )
+                : const SizedBox.shrink(),
+          ),
         ],
       ),
       bottomNavigationBar: Container(
@@ -546,24 +472,15 @@ class _HomePageState extends State<HomePage>
           }).toList(),
         ),
       ),
-      floatingActionButton: _navistatus
+      floatingActionButton: _adnavistatus
           ? FloatingActionButton(
-              backgroundColor: const Color(0xFF303030),
-              foregroundColor: const Color(0xFFFFFFFF),
-              elevation: 4,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              onPressed: _toggleExpanded,
-              child: _isExpanded
-                  ? const Icon(Icons.close_rounded)
-                  : const Text(
-                      "AD",
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
+              backgroundColor: Color(0xFF303030),
+              foregroundColor: Color(0xFFFFFFFF),
+              onPressed: _toggleExpandedAd,
+              child: _isExpandedAd ? Icon(Icons.close) : Text("AD"),
             )
-          : const SizedBox.shrink(),
-      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+          : SizedBox.shrink(),
+      floatingActionButtonLocation: FloatingActionButtonLocation.miniEndFloat,
     );
   }
 

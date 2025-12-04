@@ -1,10 +1,12 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:mime/mime.dart';
 import 'package:gal/gal.dart';
+import 'package:open_file/open_file.dart';
 
 class MediaStoreService {
   /// Determine if file is media (image or video)
@@ -43,7 +45,7 @@ class MediaStoreService {
   static Future<String?> saveToGallery(String fileName, List<int> bytes) async {
     try {
       // Only attempt gallery operations on supported platforms
-      if (!(Platform.isAndroid || Platform.isIOS || Platform.isMacOS)) {
+      if (!(Platform.isAndroid || Platform.isIOS)) {
         return null;
       }
 
@@ -73,7 +75,8 @@ class MediaStoreService {
         await tempFile.delete();
       }
 
-      return 'Saved to gallery: $fileName';
+      // Return a special marker to indicate gallery save
+      return 'gallery://$fileName';
     } catch (e) {
       debugPrint('Error saving to gallery: $e');
       return null;
@@ -142,6 +145,10 @@ class MediaStoreService {
         final uniqueFile = File(uniqueFilePath);
 
         await uniqueFile.writeAsBytes(bytes);
+
+        // Scan the file to make it visible in file managers
+        await _scanMediaFile(uniqueFilePath);
+
         debugPrint(
           'File saved successfully to app-specific storage: $uniqueFilePath',
         );
@@ -223,5 +230,71 @@ class MediaStoreService {
     }
 
     return filePath;
+  }
+
+  /// Open a file with the default application
+  /// Returns true if successful, false otherwise
+  static Future<bool> openFile(String filePath) async {
+    try {
+      // Handle gallery marker
+      if (filePath.startsWith('gallery://')) {
+        debugPrint('File is in gallery, cannot open directly');
+        return false;
+      }
+
+      final result = await OpenFile.open(filePath);
+      return result.type == ResultType.done;
+    } catch (e) {
+      debugPrint('Error opening file: $e');
+      return false;
+    }
+  }
+
+  /// Open file manager at the location of the file
+  /// On Android, this will trigger MediaScanner to make the file visible
+  static Future<bool> showInFileManager(String filePath) async {
+    try {
+      // Handle gallery marker
+      if (filePath.startsWith('gallery://')) {
+        debugPrint('File is in gallery, use gallery app to view');
+        return false;
+      }
+
+      if (Platform.isAndroid) {
+        // Scan the file to make it visible in file managers
+        await _scanMediaFile(filePath);
+
+        // Try to open the parent directory
+        final directory = path.dirname(filePath);
+        final result = await OpenFile.open(directory);
+        return result.type == ResultType.done;
+      } else if (Platform.isMacOS) {
+        // On macOS, open Finder at the file location
+        final directory = path.dirname(filePath);
+        final result = await OpenFile.open(directory);
+        return result.type == ResultType.done;
+      } else if (Platform.isIOS) {
+        // iOS doesn't have a file manager concept, just open the file
+        return await openFile(filePath);
+      }
+
+      return false;
+    } catch (e) {
+      debugPrint('Error showing file in manager: $e');
+      return false;
+    }
+  }
+
+  /// Scan media file to make it visible in Android file managers and galleries
+  static Future<void> _scanMediaFile(String filePath) async {
+    if (!Platform.isAndroid) return;
+
+    try {
+      const platform = MethodChannel('aedove/media_store');
+      await platform.invokeMethod('scanFile', {'path': filePath});
+      debugPrint('Media scan triggered for: $filePath');
+    } catch (e) {
+      debugPrint('Error scanning media file: $e');
+    }
   }
 }

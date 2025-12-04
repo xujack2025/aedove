@@ -260,27 +260,28 @@ class _SettingsTabState extends State<SettingsTab> {
 
           const SizedBox(height: 24),
 
-          // File Transfer Settings
+          // File Transfer Preferences
           _buildSectionCard(
             title: 'Preferences',
             icon: Icons.tune_rounded,
             children: [
               SwitchListTile(
-                contentPadding: EdgeInsets.zero,
+                // 1. Remove EdgeInsets.zero so it aligns with the title above it
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16),
                 title: const Text(
                   'Notifications',
                   style: TextStyle(fontWeight: FontWeight.w500),
                 ),
                 subtitle: const Text('Show alerts for file transfers'),
                 value: _notificationsEnabled,
-                thumbColor: WidgetStateProperty.resolveWith<Color?>((
-                  Set<WidgetState> states,
-                ) {
-                  if (states.contains(WidgetState.selected)) {
-                    return Theme.of(context).colorScheme.primary;
-                  }
-                  return null;
-                }),
+                // 2. FIX: Set distinct colors for the Thumb (circle) and Track (background)
+                // When ON: White circle on Blue background
+                activeThumbColor: Colors.white,
+                activeTrackColor: Theme.of(context).colorScheme.primary,
+                // Optional: Style the "Off" state if needed
+                inactiveThumbColor: Colors.grey.shade600,
+                inactiveTrackColor: Colors.grey.shade300,
+
                 onChanged: (value) async {
                   await _saveSetting('notifications_enabled', value);
                   setState(() {
@@ -293,7 +294,7 @@ class _SettingsTabState extends State<SettingsTab> {
 
           const SizedBox(height: 24),
 
-          // App Information
+          // About Us Section
           _buildSectionCard(
             title: 'About',
             icon: Icons.info_outline_rounded,
@@ -316,7 +317,7 @@ class _SettingsTabState extends State<SettingsTab> {
                   'Version',
                   style: TextStyle(fontWeight: FontWeight.w500),
                 ),
-                subtitle: const Text('1.0.3'),
+                subtitle: const Text('1.1.0'),
               ),
               const Divider(height: 24),
               ListTile(

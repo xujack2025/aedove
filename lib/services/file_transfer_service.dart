@@ -8,6 +8,45 @@ import 'package:aedove/services/notification_service.dart';
 import 'package:aedove/services/media_store_service.dart';
 import 'package:path/path.dart' as p;
 
+enum TransferStatus { pending, transferring, completed, failed }
+
+class FileTransferProgress {
+  final String requestId;
+  final String fileName;
+  final int totalBytes;
+  final int transferredBytes;
+  final TransferStatus status;
+  final DateTime startTime;
+  final String? errorMessage;
+
+  FileTransferProgress({
+    required this.requestId,
+    required this.fileName,
+    required this.totalBytes,
+    required this.transferredBytes,
+    required this.status,
+    required this.startTime,
+    this.errorMessage,
+  });
+
+  double get progress => totalBytes > 0 ? transferredBytes / totalBytes : 0.0;
+
+  Duration get elapsed => DateTime.now().difference(startTime);
+
+  Duration? get estimatedTimeRemaining {
+    if (transferredBytes <= 0 || status != TransferStatus.transferring) {
+      return null;
+    }
+    final bytesPerSecond = transferredBytes / elapsed.inSeconds;
+    if (bytesPerSecond <= 0) return null;
+    final remainingBytes = totalBytes - transferredBytes;
+    final secondsRemaining = remainingBytes / bytesPerSecond;
+    return Duration(seconds: secondsRemaining.ceil());
+  }
+
+  String get progressPercent => '${(progress * 100).toStringAsFixed(0)}%';
+}
+
 class FileTransferRequest {
   final String id;
   final String senderId;
@@ -73,12 +112,21 @@ class FileTransferService {
   // Stream that emits the path of the last saved file on the receiver
   static final StreamController<String> _fileSavedController =
       StreamController<String>.broadcast();
+  // Stream that emits file transfer progress updates
+  static final StreamController<FileTransferProgress> _progressController =
+      StreamController<FileTransferProgress>.broadcast();
+  // Map of request id -> progress info
+  static final Map<String, FileTransferProgress> _activeTransfers = {};
 
   static Stream<List<FileTransferRequest>> get requestsStream =>
       _requestsController.stream;
   static Stream<String> get fileSavedStream => _fileSavedController.stream;
+  static Stream<FileTransferProgress> get progressStream =>
+      _progressController.stream;
   static List<FileTransferRequest> get pendingRequests =>
       _pendingRequests.values.toList();
+  static Map<String, FileTransferProgress> get activeTransfers =>
+      Map.unmodifiable(_activeTransfers);
 
   /// Check if the file transfer server is running
   static bool isServerRunning() {
@@ -120,9 +168,9 @@ class FileTransferService {
           debugPrint('Failed to restart server: $e');
         });
       } else {
-        debugPrint(
-          '✓ File transfer server health check OK (port: $_currentPort)',
-        );
+        // debugPrint(
+        //   '✓ File transfer server health check OK (port: $_currentPort)',
+        // );
       }
     });
   }
@@ -245,76 +293,95 @@ class FileTransferService {
         final data = jsonDecode(body);
         final requestId = data['request_id'];
 
-        // Check if we have this outgoing file to send
+        // Respond immediately to prevent timeout on receiver side
+        request.response
+          ..statusCode = 200
+          ..write('OK')
+          ..close();
+
+        // Now send file in background (non-blocking)
         if (_outgoingFiles.containsKey(requestId)) {
           final remoteAddress = request.connectionInfo?.remoteAddress.address;
           if (remoteAddress != null) {
             final localPath = _outgoingFiles[requestId];
             if (localPath != null) {
-              try {
-                final file = File(localPath);
-                if (await file.exists()) {
-                  final bytes = await file.readAsBytes();
-                  bool sent = false;
+              // Execute file transfer asynchronously without blocking
+              unawaited(
+                Future(() async {
+                  try {
+                    final file = File(localPath);
+                    if (await file.exists()) {
+                      final bytes = await file.readAsBytes();
+                      bool sent = false;
 
-                  // Try all available ports to send file to receiver
-                  for (final port in _fileTransferPorts) {
-                    final client = http.Client();
-                    try {
-                      debugPrint(
-                        'Trying to send file to receiver on port $port',
-                      );
-                      final uri = Uri.parse(
-                        'http://$remoteAddress:$port/transfer',
-                      );
-                      final resp = await client
-                          .post(
-                            uri,
-                            headers: {
-                              'Content-Type': 'application/octet-stream',
-                              'request_id': requestId,
-                              'file_name': Uri.encodeComponent(
-                                p.basename(localPath),
-                              ),
-                            },
-                            body: bytes,
-                          )
-                          .timeout(const Duration(seconds: 5));
-                      client.close();
+                      // Try all available ports to send file to receiver
+                      for (final port in _fileTransferPorts) {
+                        final client = http.Client();
+                        try {
+                          debugPrint(
+                            'Trying to send file to receiver on port $port',
+                          );
+                          final uri = Uri.parse(
+                            'http://$remoteAddress:$port/transfer',
+                          );
+                          final timeout = _calculateFileTransferTimeout(
+                            bytes.length,
+                          );
+                          debugPrint(
+                            'Transferring ${_formatFileSize(bytes.length)} with ${timeout.inSeconds}s timeout',
+                          );
+                          final resp = await client
+                              .post(
+                                uri,
+                                headers: {
+                                  'Content-Type': 'application/octet-stream',
+                                  'request_id': requestId,
+                                  'file_name': Uri.encodeComponent(
+                                    p.basename(localPath),
+                                  ),
+                                },
+                                body: bytes,
+                              )
+                              .timeout(timeout);
+                          client.close();
 
-                      if (resp.statusCode == 200) {
+                          if (resp.statusCode == 200) {
+                            debugPrint(
+                              'Successfully sent file to receiver on port $port',
+                            );
+                            // Clean up pending/outgoing entries
+                            _outgoingFiles.remove(requestId);
+                            _pendingRequests.remove(requestId);
+                            _requestsController.add(
+                              _pendingRequests.values.toList(),
+                            );
+                            sent = true;
+                            break;
+                          } else {
+                            debugPrint(
+                              'Failed to push file on port $port: ${resp.statusCode}',
+                            );
+                          }
+                        } catch (e) {
+                          debugPrint('Error sending to port $port: $e');
+                          client.close();
+                          continue;
+                        }
+                      }
+
+                      if (!sent) {
                         debugPrint(
-                          'Successfully sent file to receiver on port $port',
-                        );
-                        // Clean up pending/outgoing entries
-                        _outgoingFiles.remove(requestId);
-                        _pendingRequests.remove(requestId);
-                        _requestsController.add(
-                          _pendingRequests.values.toList(),
-                        );
-                        sent = true;
-                        break;
-                      } else {
-                        debugPrint(
-                          'Failed to push file on port $port: ${resp.statusCode}',
+                          'Failed to send file to receiver on any port',
                         );
                       }
-                    } catch (e) {
-                      debugPrint('Error sending to port $port: $e');
-                      client.close();
-                      continue;
+                    } else {
+                      debugPrint('Local file not found to send: $localPath');
                     }
+                  } catch (e) {
+                    debugPrint('Error sending file bytes to receiver: $e');
                   }
-
-                  if (!sent) {
-                    debugPrint('Failed to send file to receiver on any port');
-                  }
-                } else {
-                  debugPrint('Local file not found to send: $localPath');
-                }
-              } catch (e) {
-                debugPrint('Error sending file bytes to receiver: $e');
-              }
+                }),
+              );
             } else {
               debugPrint('No local file path found for request $requestId');
             }
@@ -322,38 +389,81 @@ class FileTransferService {
             debugPrint('No remote address available for /accept request');
           }
         }
-
-        request.response
-          ..statusCode = 200
-          ..write('OK')
-          ..close();
       } else if (request.method == 'POST' && request.uri.path == '/transfer') {
         // Receiver: accept raw file bytes from sender
+        final requestId = request.headers.value('request_id') ?? '';
+        final encodedFileName =
+            request.headers.value('file_name') ?? 'received_file';
+        final fileName = Uri.decodeComponent(encodedFileName);
         try {
-          final requestId = request.headers.value('request_id') ?? '';
-          final encodedFileName =
-              request.headers.value('file_name') ?? 'received_file';
-          final fileName = Uri.decodeComponent(encodedFileName);
+          // Get file size from pending request if available
+          final int? expectedSize = _pendingRequests[requestId]?.fileSize;
+
+          // Initialize progress tracking
+          if (expectedSize != null) {
+            final progress = FileTransferProgress(
+              requestId: requestId,
+              fileName: fileName,
+              totalBytes: expectedSize,
+              transferredBytes: 0,
+              status: TransferStatus.transferring,
+              startTime: DateTime.now(),
+            );
+            _activeTransfers[requestId] = progress;
+            _progressController.add(progress);
+          }
 
           // Collect all bytes from the request
-          final bytes = await request.fold<List<int>>(
-            [],
-            (previous, element) => previous..addAll(element),
-          );
+          final bytes = await request.fold<List<int>>([], (previous, element) {
+            final updated = previous..addAll(element);
+            // Emit progress updates
+            if (expectedSize != null) {
+              final progress = FileTransferProgress(
+                requestId: requestId,
+                fileName: fileName,
+                totalBytes: expectedSize,
+                transferredBytes: updated.length,
+                status: TransferStatus.transferring,
+                startTime:
+                    _activeTransfers[requestId]?.startTime ?? DateTime.now(),
+              );
+              _activeTransfers[requestId] = progress;
+              _progressController.add(progress);
+            }
+            return updated;
+          });
 
           // Save using MediaStoreService which handles platform differences
           try {
             final filePath = await MediaStoreService.saveFile(fileName, bytes);
 
+            // Mark transfer as completed
+            final completedProgress = FileTransferProgress(
+              requestId: requestId,
+              fileName: fileName,
+              totalBytes: bytes.length,
+              transferredBytes: bytes.length,
+              status: TransferStatus.completed,
+              startTime:
+                  _activeTransfers[requestId]?.startTime ?? DateTime.now(),
+            );
+            _activeTransfers[requestId] = completedProgress;
+            _progressController.add(completedProgress);
+
             // Notify user
             if (_pendingRequests.containsKey(requestId)) {
               final tr = _pendingRequests[requestId]!;
-              await NotificationService.showFileReceivedNotification(
-                fileName: tr.fileName,
-                fileSize: _formatFileSize(tr.fileSize),
-                filePath: filePath,
-                isIOS: Platform.isIOS,
-              );
+              try {
+                await NotificationService.showFileReceivedNotification(
+                  fileName: tr.fileName,
+                  fileSize: _formatFileSize(tr.fileSize),
+                  filePath: filePath,
+                  isIOS: Platform.isIOS,
+                );
+              } catch (e) {
+                debugPrint('Error showing file received notification: $e');
+                // Don't fail the transfer if notification fails
+              }
               _pendingRequests.remove(requestId);
               _requestsController.add(_pendingRequests.values.toList());
               // Emit saved file path for UI listeners
@@ -361,16 +471,26 @@ class FileTransferService {
                 _fileSavedController.add(filePath);
               } catch (_) {}
             } else {
-              await NotificationService.showFileReceivedNotification(
-                fileName: fileName,
-                fileSize: _formatFileSize(bytes.length),
-                filePath: filePath,
-                isIOS: Platform.isIOS,
-              );
+              try {
+                await NotificationService.showFileReceivedNotification(
+                  fileName: fileName,
+                  fileSize: _formatFileSize(bytes.length),
+                  filePath: filePath,
+                  isIOS: Platform.isIOS,
+                );
+              } catch (e) {
+                debugPrint('Error showing file received notification: $e');
+                // Don't fail the transfer if notification fails
+              }
               try {
                 _fileSavedController.add(filePath);
               } catch (_) {}
             }
+
+            // Clean up progress after a delay
+            Future.delayed(const Duration(seconds: 3), () {
+              _activeTransfers.remove(requestId);
+            });
 
             request.response
               ..statusCode = 200
@@ -378,6 +498,22 @@ class FileTransferService {
               ..close();
           } catch (e) {
             debugPrint('Error saving file: $e');
+            // Mark transfer as failed
+            final failedProgress = FileTransferProgress(
+              requestId: requestId,
+              fileName: fileName,
+              totalBytes: expectedSize ?? 0,
+              transferredBytes: 0,
+              status: TransferStatus.failed,
+              startTime:
+                  _activeTransfers[requestId]?.startTime ?? DateTime.now(),
+              errorMessage: e.toString(),
+            );
+            _activeTransfers[requestId] = failedProgress;
+            _progressController.add(failedProgress);
+            Future.delayed(const Duration(seconds: 5), () {
+              _activeTransfers.remove(requestId);
+            });
             request.response
               ..statusCode = 500
               ..write('Error saving file: $e')
@@ -385,6 +521,20 @@ class FileTransferService {
           }
         } catch (e) {
           debugPrint('Error receiving file transfer: $e');
+          // Mark transfer as failed
+          if (requestId.isNotEmpty) {
+            final failedProgress = FileTransferProgress(
+              requestId: requestId,
+              fileName: encodedFileName,
+              totalBytes: 0,
+              transferredBytes: 0,
+              status: TransferStatus.failed,
+              startTime: DateTime.now(),
+              errorMessage: e.toString(),
+            );
+            _activeTransfers[requestId] = failedProgress;
+            _progressController.add(failedProgress);
+          }
           request.response
             ..statusCode = 500
             ..write('Error receiving file: $e')
@@ -552,7 +702,7 @@ class FileTransferService {
                 headers: {'Content-Type': 'application/json'},
                 body: jsonEncode({'request_id': requestId}),
               )
-              .timeout(const Duration(seconds: 2));
+              .timeout(const Duration(seconds: 10));
 
           if (response.statusCode == 200) {
             debugPrint('Successfully sent accept request to port $port');
@@ -609,7 +759,7 @@ class FileTransferService {
                 headers: {'Content-Type': 'application/json'},
                 body: jsonEncode({'request_id': requestId}),
               )
-              .timeout(const Duration(seconds: 2));
+              .timeout(const Duration(seconds: 10));
 
           if (response.statusCode == 200) {
             debugPrint('Successfully sent deny request to port $port');
@@ -638,6 +788,19 @@ class FileTransferService {
     } catch (e) {
       debugPrint('Error denying file transfer: $e');
     }
+  }
+
+  /// Calculate timeout duration based on file size
+  /// Base timeout of 30 seconds + 5 seconds per 10MB
+  /// Examples: 10MB=35s, 100MB=80s, 1GB=542s (~9min), 10GB=5130s (~85min)
+  static Duration _calculateFileTransferTimeout(int fileSizeBytes) {
+    const baseSeconds = 30;
+    const secondsPer10MB = 5;
+    const bytesIn10MB = 10 * 1024 * 1024;
+
+    final additionalSeconds = (fileSizeBytes / bytesIn10MB * secondsPer10MB)
+        .ceil();
+    return Duration(seconds: baseSeconds + additionalSeconds);
   }
 
   static String _formatFileSize(int bytes) {
