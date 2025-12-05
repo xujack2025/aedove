@@ -12,9 +12,34 @@ class MediaStoreService {
   /// Determine if file is media (image or video)
   static bool isMediaFile(String fileName) {
     final mimeType = lookupMimeType(fileName);
+    debugPrint('Checking if media file: $fileName, mime: $mimeType');
     return mimeType?.startsWith('image/') == true ||
         mimeType?.startsWith('video/') == true;
   }
+
+  /// Get a list of commonly supported image extensions
+  static const List<String> supportedImageExtensions = [
+    'jpg',
+    'jpeg',
+    'png',
+    'gif',
+    'bmp',
+    'webp',
+    'heic',
+    'heif',
+  ];
+
+  /// Get a list of commonly supported video extensions
+  static const List<String> supportedVideoExtensions = [
+    'mp4',
+    'mov',
+    'avi',
+    'mkv',
+    'webm',
+    '3gp',
+    'flv',
+    'm4v',
+  ];
 
   /// Save a file using the appropriate method for the platform and Android version.
   /// Returns the path where the file was saved.
@@ -46,6 +71,7 @@ class MediaStoreService {
     try {
       // Only attempt gallery operations on supported platforms
       if (!(Platform.isAndroid || Platform.isIOS)) {
+        debugPrint('Gallery save not supported on this platform');
         return null;
       }
 
@@ -53,7 +79,14 @@ class MediaStoreService {
       final isImage = mimeType?.startsWith('image/') == true;
       final isVideo = mimeType?.startsWith('video/') == true;
 
+      debugPrint(
+        'saveToGallery: $fileName, mime: $mimeType, isImage: $isImage, isVideo: $isVideo',
+      );
+
       if (!isImage && !isVideo) {
+        debugPrint(
+          'File is not a supported media type: $fileName (mime: $mimeType)',
+        );
         return null;
       }
 
@@ -61,14 +94,29 @@ class MediaStoreService {
       final tempDir = await getTemporaryDirectory();
       final safeName = fileName.replaceAll(RegExp(r"[^A-Za-z0-9._-]"), "_");
       final tempFile = File('${tempDir.path}/$safeName');
+
+      debugPrint(
+        'Writing ${bytes.length} bytes to temp file: ${tempFile.path}',
+      );
       await tempFile.writeAsBytes(bytes);
 
+      // Verify temp file was created
+      if (!await tempFile.exists()) {
+        debugPrint('Failed to create temp file: ${tempFile.path}');
+        return null;
+      }
+
       // Save to gallery
+      debugPrint(
+        'Attempting to save ${isImage ? "image" : "video"} to gallery',
+      );
       if (isImage) {
         await Gal.putImage(tempFile.path);
       } else {
         await Gal.putVideo(tempFile.path);
       }
+
+      debugPrint('Successfully saved to gallery: $fileName');
 
       // Clean up temp file
       if (await tempFile.exists()) {
@@ -78,6 +126,8 @@ class MediaStoreService {
       // Return a special marker to indicate gallery save
       return 'gallery://$fileName';
     } catch (e) {
+      debugPrint('Error in saveToGallery for $fileName: $e');
+      debugPrint('Stack trace: ${StackTrace.current}');
       debugPrint('Error saving to gallery: $e');
       return null;
     }

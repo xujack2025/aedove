@@ -899,24 +899,35 @@ class DeviceDiscoveryService {
       return;
     }
 
-    // Deduplicate by IP. Retain the entry that contains the most useful information (valid port wins)
-    String existingKey = '';
-    for (final e in _discoveredDevices.entries) {
-      if (e.value.ip == deviceInfo.ip && e.key != deviceInfo.id) {
-        existingKey = e.key;
-        break;
+    // Deduplicate by Device ID first, then by IP
+    // If same device ID already exists with different IP, update with newer info
+    if (_discoveredDevices.containsKey(deviceInfo.id)) {
+      final existing = _discoveredDevices[deviceInfo.id]!;
+      // Update if port is valid or IP is newer
+      if (deviceInfo.port > 0 ||
+          deviceInfo.lastSeen.isAfter(existing.lastSeen)) {
+        _discoveredDevices[deviceInfo.id] = deviceInfo;
       }
-    }
-    if (existingKey.isNotEmpty) {
-      final existing = _discoveredDevices[existingKey]!;
-      // If current record lacks port but existing has one, keep existing
-      if (existing.port > 0 && deviceInfo.port <= 0) {
-        return;
+    } else {
+      // Check for duplicate by IP (different device ID with same IP)
+      String existingKey = '';
+      for (final e in _discoveredDevices.entries) {
+        if (e.value.ip == deviceInfo.ip && e.key != deviceInfo.id) {
+          existingKey = e.key;
+          break;
+        }
       }
-      _discoveredDevices.remove(existingKey);
-    }
+      if (existingKey.isNotEmpty) {
+        final existing = _discoveredDevices[existingKey]!;
+        // If current record lacks port but existing has one, keep existing
+        if (existing.port > 0 && deviceInfo.port <= 0) {
+          return;
+        }
+        _discoveredDevices.remove(existingKey);
+      }
 
-    _discoveredDevices[deviceInfo.id] = deviceInfo;
+      _discoveredDevices[deviceInfo.id] = deviceInfo;
+    }
     _devicesController.add(_discoveredDevices.values.toList());
     if (_verbose) debugPrint('Updated device: ${deviceInfo.toJson()}');
   }

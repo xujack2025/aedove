@@ -1,13 +1,21 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 // import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:aedove/pages/home_page.dart';
 import 'package:aedove/services/background_service.dart';
 import 'package:aedove/services/notification_service.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
+  // Initialize Google Mobile Ads SDK only on supported platforms (Android and iOS)
+  if (Platform.isAndroid || Platform.isIOS) {
+    await MobileAds.instance.initialize();
+  }
+  // Load environment variables from .env file
+  await dotenv.load(fileName: ".env");
   // Configure system UI for edge-to-edge on Android 15+
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
 

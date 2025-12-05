@@ -1,7 +1,7 @@
 name: aedove
 description: "A simple cross-platform file sharing app."
 publish_to: 'none'
-version: 1.1.0+13
+version: 1.1.1+16
 
 environment:
   sdk: ^3.9.2
@@ -26,6 +26,8 @@ dependencies:
   image: ^4.5.4
   image_picker: ^1.1.2
   gal: ^2.3.0
+  wechat_assets_picker: ^9.3.1
+  photo_manager: ^3.5.1
   # For automated WiFi file sharing
   crypto: ^3.0.6
   # For network discovery and file sharing
@@ -36,6 +38,8 @@ dependencies:
   flutter_inappwebview: ^6.1.5
   url_launcher: ^6.3.2
   open_file: ^3.5.10
+  google_mobile_ads: ^6.0.0
+  flutter_dotenv: ^5.2.1
 
 
 dev_dependencies:
@@ -50,6 +54,7 @@ flutter:
 
   assets:
      - assets/images/
+     - .env
 
 flutter_launcher_icons:
   android: "launcher_icon"
