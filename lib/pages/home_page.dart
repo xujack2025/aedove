@@ -14,6 +14,7 @@ import 'package:aedove/services/permission_service.dart';
 import 'package:aedove/services/device_discovery_service.dart';
 import 'package:aedove/constant.dart';
 import 'package:aedove/ad_web_view.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 enum HomeTab {
   receive(Icons.wifi),
@@ -58,7 +59,9 @@ class _HomePageState extends State<HomePage>
 
   void _reloadWebViewAD() {
     if (_adWebViewController != null) {
-      _adWebViewController!.loadUrl(urlRequest: URLRequest(url: WebUri(_popupBannerLink)));
+      _adWebViewController!.loadUrl(
+        urlRequest: URLRequest(url: WebUri(_popupBannerLink)),
+      );
     }
   }
 
@@ -78,12 +81,56 @@ class _HomePageState extends State<HomePage>
   late String _popupBannerLink = Constant.AD_URL;
   String durationAPILink = Constant.AD_API;
 
+  // Google AdMob Banner Ad
+  BannerAd? _bannerAd;
+  bool _isBannerAdLoaded = false;
+
+  bool _hasInitialized = false;
+
   @override
   void initState() {
     super.initState();
     _requestPermissions();
-    _startDeviceDiscovery();
     _fetchLinkDuration();
+    _loadBannerAd();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_hasInitialized) {
+      _hasInitialized = true;
+      _startDeviceDiscovery();
+    }
+  }
+
+  void _loadBannerAd() {
+    // Only load banner ads on supported platforms (Android and iOS)
+    if (!Platform.isAndroid && !Platform.isIOS) {
+      debugPrint('Banner ads not supported on this platform');
+      return;
+    }
+
+    _bannerAd = BannerAd(
+      adUnitId: Constant.bannerAdUnitId,
+      size: AdSize.banner,
+      request: const AdRequest(),
+      listener: BannerAdListener(
+        onAdLoaded: (ad) {
+          setState(() {
+            _isBannerAdLoaded = true;
+          });
+          debugPrint('Banner ad loaded successfully');
+        },
+        onAdFailedToLoad: (ad, error) {
+          debugPrint('Banner ad failed to load: $error');
+          ad.dispose();
+          setState(() {
+            _isBannerAdLoaded = false;
+          });
+        },
+      ),
+    )..load();
   }
 
   // ========================= ADS FLOW (FETCH, ROTATE, TIMERS) =========================
@@ -107,7 +154,7 @@ class _HomePageState extends State<HomePage>
         final jsonData = jsonDecode(responseData.body);
         adLinkDurationData = jsonData['advertisements'];
         if (adLinkDurationData.isEmpty) {
-          print("Stopping Ads 1");
+          debugPrint("Stopping Ads 1");
           adLinkDurationData = [];
           setState(() {
             _adnavistatus = false;
@@ -124,7 +171,7 @@ class _HomePageState extends State<HomePage>
         }
       }
     } catch (e) {
-      print("error occured: $e");
+      debugPrint("error occured: $e");
     }
   }
 
@@ -132,8 +179,8 @@ class _HomePageState extends State<HomePage>
     if (adLinkDurationData.isNotEmpty) {
       Map<String, dynamic> bannerItem = adLinkDurationData[adLinksIndex];
       String link = bannerItem['link'];
-      int show_duration = (bannerItem['show']);
-      int hide_duration = (bannerItem['hide']);
+      int showDuration = (bannerItem['show']);
+      int hideDuration = (bannerItem['hide']);
       _popupBannerLink = link;
       _reloadWebViewAD();
       if (_adWebViewController != null) {
@@ -141,9 +188,9 @@ class _HomePageState extends State<HomePage>
           urlRequest: URLRequest(url: WebUri(_popupBannerLink)),
         );
       }
-      _visibleADTimer(show_duration, hide_duration);
+      _visibleADTimer(showDuration, hideDuration);
     } else {
-      print("Stopping Ads 2");
+      debugPrint("Stopping Ads 2");
       adLinkDurationData = [];
       _adnavistatus = false;
       _hiddenTimer?.cancel();
@@ -153,7 +200,7 @@ class _HomePageState extends State<HomePage>
 
   void _visibleADTimer(int timerDuration, int hidetimerDuration) {
     _reloadWebViewAD();
-    print("Showing: $timerDuration");
+    debugPrint("Showing: $timerDuration");
     _hiddenTimer?.cancel();
     _visibleTimer = Timer.periodic(Duration(seconds: timerDuration), (timer) {
       if (!_loginStop) {
@@ -164,7 +211,7 @@ class _HomePageState extends State<HomePage>
   }
 
   void _hiddenADTimer(int hidetimerDuration) {
-    print("Hiding: $hidetimerDuration");
+    debugPrint("Hiding: $hidetimerDuration");
     _isExpandedAd = false;
     _visibleTimer?.cancel();
     _hiddenTimer = Timer.periodic(Duration(seconds: hidetimerDuration), (
@@ -439,38 +486,52 @@ class _HomePageState extends State<HomePage>
           ),
         ],
       ),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withAlpha((0.05 * 255).round()),
-              blurRadius: 20,
-              offset: const Offset(0, -5),
+      bottomNavigationBar: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // AdMob Banner Ad
+          if (_isBannerAdLoaded && _bannerAd != null)
+            Container(
+              color: Colors.white,
+              width: _bannerAd!.size.width.toDouble(),
+              height: _bannerAd!.size.height.toDouble(),
+              child: AdWidget(ad: _bannerAd!),
             ),
-          ],
-        ),
-        child: NavigationBar(
-          height: 70,
-          elevation: 0,
-          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-          indicatorColor: Theme.of(context).colorScheme.primaryContainer,
-          selectedIndex: _currentTab.index,
-          onDestinationSelected: (index) {
-            setState(() {
-              _currentTab = HomeTab.values[index];
-            });
-          },
-          destinations: HomeTab.values.map((tab) {
-            return NavigationDestination(
-              icon: Icon(tab.icon),
-              selectedIcon: Icon(
-                tab.icon,
-                color: Theme.of(context).colorScheme.primary,
-              ),
-              label: tab.label,
-            );
-          }).toList(),
-        ),
+          // Navigation Bar
+          Container(
+            decoration: BoxDecoration(
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withAlpha((0.05 * 255).round()),
+                  blurRadius: 20,
+                  offset: const Offset(0, -5),
+                ),
+              ],
+            ),
+            child: NavigationBar(
+              height: 70,
+              elevation: 0,
+              backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+              indicatorColor: Theme.of(context).colorScheme.primaryContainer,
+              selectedIndex: _currentTab.index,
+              onDestinationSelected: (index) {
+                setState(() {
+                  _currentTab = HomeTab.values[index];
+                });
+              },
+              destinations: HomeTab.values.map((tab) {
+                return NavigationDestination(
+                  icon: Icon(tab.icon),
+                  selectedIcon: Icon(
+                    tab.icon,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  label: tab.label,
+                );
+              }).toList(),
+            ),
+          ),
+        ],
       ),
       floatingActionButton: _adnavistatus
           ? FloatingActionButton(
@@ -486,6 +547,7 @@ class _HomePageState extends State<HomePage>
 
   @override
   void dispose() {
+    _bannerAd?.dispose();
     _refreshController.dispose();
     super.dispose();
   }

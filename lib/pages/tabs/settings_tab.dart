@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:network_info_plus/network_info_plus.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class SettingsTab extends StatefulWidget {
   const SettingsTab({super.key});
@@ -294,6 +295,41 @@ class _SettingsTabState extends State<SettingsTab> {
 
           const SizedBox(height: 24),
 
+          // Contact Us Section
+          _buildSectionCard(
+            title: 'Contact Us',
+            icon: Icons.contact_mail_rounded,
+            children: [
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.green.withAlpha((0.1 * 255).round()),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.campaign_rounded,
+                    color: Colors.green,
+                    size: 20,
+                  ),
+                ),
+                title: const Text(
+                  'Advertise With Us',
+                  style: TextStyle(fontWeight: FontWeight.w500),
+                ),
+                subtitle: const Text('Post your ads in our app'),
+                trailing: const Icon(Icons.open_in_new_rounded),
+                onTap: () {
+                  // TODO: Replace with actual contact/ads URL
+                  _showContactDialog();
+                },
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 24),
+
           // About Us Section
           _buildSectionCard(
             title: 'About',
@@ -317,7 +353,7 @@ class _SettingsTabState extends State<SettingsTab> {
                   'Version',
                   style: TextStyle(fontWeight: FontWeight.w500),
                 ),
-                subtitle: const Text('1.1.0'),
+                subtitle: const Text('1.1.1'),
               ),
               const Divider(height: 24),
               ListTile(
@@ -377,5 +413,35 @@ class _SettingsTabState extends State<SettingsTab> {
         ],
       ),
     );
+  }
+
+  Future<void> _showContactDialog() async {
+    const url = 'https://aedove.com/contact.html';
+    final uri = Uri.parse(url);
+
+    try {
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Could not open contact page'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('Error launching URL: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Error opening contact page'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 }

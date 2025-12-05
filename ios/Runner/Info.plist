@@ -3,9 +3,11 @@
 <plist version="1.0">
 	<dict>
 		<key>CADisableMinimumFrameDurationOnPhone</key>
-		<true/>
+		<true />
 		<key>CFBundleDevelopmentRegion</key>
 		<string>$(DEVELOPMENT_LANGUAGE)</string>
+		<key>GADApplicationIdentifier</key>
+		<string>ca-app-pub-4619397424045622~4153804325</string>
 		<key>CFBundleDisplayName</key>
 		<string>Aedove</string>
 		<key>CFBundleExecutable</key>
@@ -36,28 +38,36 @@
 		<key>CFBundleVersion</key>
 		<string>$(FLUTTER_BUILD_NUMBER)</string>
 		<key>LSRequiresIPhoneOS</key>
-		<true/>
+		<true />
 		<key>LSSupportsOpeningDocumentsInPlace</key>
-		<true/>
+		<true />
 		<key>NSBonjourServices</key>
 		<array>
 			<string>_aedove._tcp</string>
 			<string>_aedove._tcp.</string>
 		</array>
 		<key>NSLocalNetworkUsageDescription</key>
-		<string>Discover nearby devices on the local WiFi to let users send and receive files. This is used only for device discovery and local transfers; no location, device list, or personal data is collected or sent to our servers.</string>
+		<string>Discover nearby devices on the local WiFi to let users send and receive files. This
+			is used only for device discovery and local transfers; no location, device list, or
+			personal data is collected or sent to our servers.</string>
 		<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-		<string>Discover nearby devices on the local WiFi to let users send and receive files. This is used only for device discovery and local transfers; no location, device list, or personal data is collected or sent to our servers.</string>
+		<string>Discover nearby devices on the local WiFi to let users send and receive files. This
+			is used only for device discovery and local transfers; no location, device list, or
+			personal data is collected or sent to our servers.</string>
 		<key>NSLocationWhenInUseUsageDescription</key>
-		<string>Discover nearby devices on the local WiFi to let users send and receive files. This is used only for device discovery and local transfers; no location, device list, or personal data is collected or sent to our servers.</string>
+		<string>Discover nearby devices on the local WiFi to let users send and receive files. This
+			is used only for device discovery and local transfers; no location, device list, or
+			personal data is collected or sent to our servers.</string>
 		<key>NSPhotoLibraryAddUsageDescription</key>
-		<string>Allow saving received photos and videos to your library. Items are saved only when you confirm.</string>
+		<string>Allow saving received photos and videos to your library. Items are saved only when
+			you confirm.</string>
 		<key>NSPhotoLibraryUsageDescription</key>
-		<string>Allow selecting photos and videos to share with nearby devices. Photos are accessed only when you choose them and are not uploaded without permission.</string>
+		<string>Allow selecting photos and videos to share with nearby devices. Photos are accessed
+			only when you choose them and are not uploaded without permission.</string>
 		<key>UIApplicationSupportsIndirectInputEvents</key>
-		<true/>
+		<true />
 		<key>UIFileSharingEnabled</key>
-		<true/>
+		<true />
 		<key>UILaunchStoryboardName</key>
 		<string>LaunchScreen</string>
 		<key>UIMainStoryboardFile</key>
@@ -76,8 +86,8 @@
 			<string>UIInterfaceOrientationLandscapeRight</string>
 		</array>
 		<key>UISupportsDocumentBrowser</key>
-		<true/>
+		<true />
 		<key>UIStatusBarHidden</key>
-		<false/>
+		<false />
 	</dict>
 </plist>

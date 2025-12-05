@@ -2,11 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
-import 'package:image_picker/image_picker.dart';
+import 'package:wechat_assets_picker/wechat_assets_picker.dart';
 import 'package:aedove/services/device_discovery_service.dart';
 import 'package:aedove/services/file_transfer_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path/path.dart' as p;
+import 'package:mime/mime.dart';
 
 class SendTab extends StatefulWidget {
   const SendTab({super.key});
@@ -19,8 +20,12 @@ class _SendTabState extends State<SendTab> {
   List<File> _selectedFiles = [];
   List<DeviceInfo> _discoveredDevices = [];
   final Map<String, bool> _sendingByDeviceId = {};
+  final Map<String, bool> _sentSuccessfullyByDeviceId = {};
   String _deviceId = '';
   bool _isPickerActive = false; // Track if a picker is currently active
+  bool _isLoadingFiles = false; // Track if files are being loaded/validated
+  String _loadingMessage =
+      'Processing files...'; // Message to show during loading
 
   @override
   void initState() {
@@ -62,12 +67,53 @@ class _SendTabState extends State<SendTab> {
         type: FileType.any,
       );
 
-      if (result != null) {
+      if (result != null && result.files.isNotEmpty) {
         setState(() {
-          _selectedFiles = result.paths.map((path) => File(path!)).toList();
+          _isLoadingFiles = true;
+          _loadingMessage = 'Validating files...';
         });
+
+        // Process files in background to show loading state
+        final files = <File>[];
+        int skippedDirectories = 0;
+
+        for (final platformFile in result.files) {
+          if (platformFile.path != null) {
+            try {
+              final file = File(platformFile.path!);
+              // Check if it's actually a directory (e.g., .band files on iOS)
+              final stat = await FileStat.stat(platformFile.path!);
+              if (stat.type == FileSystemEntityType.directory) {
+                debugPrint('Skipping directory: ${platformFile.path}');
+                skippedDirectories++;
+                continue;
+              }
+              // Verify it's a regular file and accessible
+              if (stat.type == FileSystemEntityType.file &&
+                  await file.exists()) {
+                files.add(file);
+              }
+            } catch (e) {
+              debugPrint('Error checking file ${platformFile.path}: $e');
+            }
+          }
+        }
+
+        setState(() {
+          _selectedFiles = files;
+          _isLoadingFiles = false;
+        });
+
+        if (skippedDirectories > 0) {
+          _showErrorSnackBar(
+            'Selected ${files.length} file(s). Skipped $skippedDirectories package/directory item(s).',
+          );
+        }
       }
     } catch (e) {
+      setState(() {
+        _isLoadingFiles = false;
+      });
       _showErrorSnackBar('Error picking files: $e');
     }
   }
@@ -82,73 +128,124 @@ class _SendTabState extends State<SendTab> {
         _isPickerActive = true;
       });
 
-      // Use ImagePicker for media selection
+      // Use wechat_assets_picker for better UX
       if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
-        final picker = ImagePicker();
-
-        // Show a dialog to choose between images and videos
-        final choice = await showDialog<String>(
-          context: context,
-          builder: (BuildContext context) => AlertDialog(
-            title: const Text('Select Media Type'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ListTile(
-                  leading: const Icon(Icons.photo),
-                  title: const Text('Photos'),
-                  onTap: () => Navigator.pop(context, 'photos'),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.video_library),
-                  title: const Text('Videos'),
-                  onTap: () => Navigator.pop(context, 'videos'),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.perm_media),
-                  title: const Text('All Media'),
-                  onTap: () => Navigator.pop(context, 'all'),
-                ),
-              ],
-            ),
-          ),
-        );
-
-        if (choice == null) {
+        // Request photo permission
+        final PermissionState ps = await PhotoManager.requestPermissionExtend();
+        if (!ps.hasAccess) {
+          _showErrorSnackBar('Permission denied. Please grant photo access.');
           setState(() {
             _isPickerActive = false;
           });
           return;
         }
 
-        List<XFile> selectedMedia = [];
+        // Use wechat_assets_picker - shows selected items immediately
+        if (!mounted) return;
+        final List<AssetEntity>? result = await AssetPicker.pickAssets(
+          context,
+          pickerConfig: AssetPickerConfig(
+            maxAssets: 50,
+            requestType: RequestType.common, // Photos and videos
+            textDelegate: const EnglishAssetPickerTextDelegate(),
+          ),
+        );
 
+        debugPrint('📱 Assets picker returned ${result?.length ?? 0} items');
+
+        if (result == null || result.isEmpty) {
+          setState(() {
+            _isPickerActive = false;
+          });
+          return;
+        }
+
+        // Show loading state immediately
+        if (mounted) {
+          setState(() {
+            _isLoadingFiles = true;
+            _loadingMessage = 'Processing ${result.length} file(s)...';
+          });
+        }
+
+        // Convert AssetEntity to File
         try {
-          switch (choice) {
-            case 'photos':
-              selectedMedia = await picker.pickMultiImage();
-              break;
-            case 'videos':
-              selectedMedia = await picker
-                  .pickVideo(source: ImageSource.gallery)
-                  .then((video) => video != null ? [video] : []);
-              break;
-            case 'all':
-              selectedMedia = await picker.pickMultipleMedia();
-              break;
+          final validFiles = <File>[];
+          final totalSelected = result.length;
+
+          for (int i = 0; i < result.length; i++) {
+            final asset = result[i];
+
+            try {
+              // Update progress message
+              setState(() {
+                _loadingMessage = 'Processing file ${i + 1}/$totalSelected...';
+              });
+
+              debugPrint(
+                'Processing asset ${i + 1}/$totalSelected (${asset.type})...',
+              );
+
+              // Get file from asset
+              final file = await asset.file;
+
+              if (file == null) {
+                debugPrint('Skipping asset: file is null');
+                continue;
+              }
+
+              // Verify file
+              if (await file.exists()) {
+                final length = await file.length();
+                if (length > 0) {
+                  validFiles.add(file);
+                  debugPrint('Asset processed: ${file.path} ($length bytes)');
+                } else {
+                  debugPrint('Skipping empty file');
+                }
+              } else {
+                debugPrint('File does not exist: ${file.path}');
+              }
+            } catch (e) {
+              debugPrint('Error processing asset ${i + 1}: $e');
+            }
           }
 
-          if (selectedMedia.isNotEmpty) {
+          if (validFiles.isNotEmpty) {
             setState(() {
-              _selectedFiles = selectedMedia
-                  .where((x) => x.path.isNotEmpty)
-                  .map((x) => File(x.path))
-                  .toList();
+              _selectedFiles = validFiles;
+              _isLoadingFiles = false;
+            });
+
+            // Show feedback if some files were rejected
+            final rejected = totalSelected - validFiles.length;
+            if (rejected > 0) {
+              _showErrorSnackBar(
+                'Selected ${validFiles.length} file(s). $rejected file(s) skipped',
+              );
+            }
+          } else if (totalSelected > 0) {
+            setState(() {
+              _isLoadingFiles = false;
+            });
+            _showErrorSnackBar(
+              'All selected files were unavailable. Please try different files.',
+            );
+          } else {
+            setState(() {
+              _isLoadingFiles = false;
             });
           }
+        } catch (assetPickerError) {
+          debugPrint('AssetPicker error: $assetPickerError');
+          _showErrorSnackBar('Error selecting media: $assetPickerError');
+          setState(() {
+            _isLoadingFiles = false;
+          });
         } finally {
           setState(() {
             _isPickerActive = false;
+            _isLoadingFiles = false;
           });
         }
         return;
@@ -160,25 +257,97 @@ class _SendTabState extends State<SendTab> {
           allowMultiple: true,
           type: FileType.media,
         );
-        if (result != null) {
+        if (result != null && result.files.isNotEmpty) {
+          // Validate each file
+          final validFiles = <File>[];
+          final totalSelected = result.files.length;
+
+          for (final platformFile in result.files) {
+            if (platformFile.path == null || platformFile.path!.isEmpty) {
+              debugPrint('Skipping file with null/empty path');
+              continue;
+            }
+
+            try {
+              final file = File(platformFile.path!);
+              if (await file.exists()) {
+                final length = await file.length();
+                if (length > 0) {
+                  // Optionally validate mime type
+                  final mimeType = lookupMimeType(platformFile.path!);
+                  if (mimeType != null &&
+                      (mimeType.startsWith('image/') ||
+                          mimeType.startsWith('video/'))) {
+                    validFiles.add(file);
+                  } else {
+                    debugPrint(
+                      'Skipping non-media file: ${platformFile.path} (mime: $mimeType)',
+                    );
+                  }
+                } else {
+                  debugPrint('Skipping empty file: ${platformFile.path}');
+                }
+              } else {
+                debugPrint('File does not exist: ${platformFile.path}');
+              }
+            } catch (e) {
+              debugPrint('Error validating file ${platformFile.path}: $e');
+            }
+          }
+
+          // Show loading state while validating files
           setState(() {
-            _selectedFiles = result.paths
-                .whereType<String>()
-                .map((p) => File(p))
-                .toList();
+            _isLoadingFiles = true;
           });
+
+          if (validFiles.isNotEmpty) {
+            setState(() {
+              _selectedFiles = validFiles;
+              _isLoadingFiles = false;
+            });
+
+            final rejected = totalSelected - validFiles.length;
+            if (rejected > 0) {
+              _showErrorSnackBar(
+                'Selected ${validFiles.length} file(s). $rejected file(s) skipped (unsupported type)',
+              );
+            }
+          } else if (totalSelected > 0) {
+            setState(() {
+              _isLoadingFiles = false;
+            });
+            _showErrorSnackBar(
+              'All selected files were unsupported. Please select image or video files.',
+            );
+          } else {
+            setState(() {
+              _isLoadingFiles = false;
+            });
+          }
         }
+      } catch (filePickerError) {
+        debugPrint('FilePicker error: $filePickerError');
+        _showErrorSnackBar('Error picking media: $filePickerError');
+        setState(() {
+          _isLoadingFiles = false;
+        });
       } finally {
         // Make sure we reset the picker state even if FilePicker was cancelled
         setState(() {
           _isPickerActive = false;
+          _isLoadingFiles = false;
         });
       }
     } catch (e) {
+      debugPrint('Unexpected error in _pickMedia: $e');
       _showErrorSnackBar('Error picking media: $e');
+      setState(() {
+        _isLoadingFiles = false;
+      });
     } finally {
       setState(() {
         _isPickerActive = false;
+        _isLoadingFiles = false;
       });
     }
   }
@@ -187,6 +356,23 @@ class _SendTabState extends State<SendTab> {
     setState(() {
       _selectedFiles.clear();
     });
+  }
+
+  Future<String> _getFileSizeText(File file) async {
+    try {
+      // Check if it's a directory
+      final stat = await FileStat.stat(file.path);
+      if (stat.type == FileSystemEntityType.directory) {
+        return 'Package';
+      }
+
+      final length = await file.length();
+      final sizeMB = (length / 1024 / 1024).toStringAsFixed(2);
+      return '$sizeMB MB';
+    } catch (e) {
+      debugPrint('Error getting file size for ${file.path}: $e');
+      return 'Unknown size';
+    }
   }
 
   Future<void> _sendFilesToDevice(DeviceInfo device) async {
@@ -210,10 +396,21 @@ class _SendTabState extends State<SendTab> {
         );
       }
 
-      _showSuccessSnackBar('Files sent successfully to ${device.name}!');
+      // Show tick icon for 2 seconds instead of popup
+      setState(() {
+        _sendingByDeviceId[device.id] = false;
+        _sentSuccessfullyByDeviceId[device.id] = true;
+      });
+
+      // Reset to send button after 2 seconds
+      await Future.delayed(const Duration(seconds: 2));
+      if (mounted) {
+        setState(() {
+          _sentSuccessfullyByDeviceId[device.id] = false;
+        });
+      }
     } catch (e) {
       _showErrorSnackBar('Error sending files: $e');
-    } finally {
       setState(() {
         _sendingByDeviceId[device.id] = false;
       });
@@ -223,12 +420,6 @@ class _SendTabState extends State<SendTab> {
   void _showErrorSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message), backgroundColor: Colors.red),
-    );
-  }
-
-  void _showSuccessSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.green),
     );
   }
 
@@ -348,6 +539,45 @@ class _SendTabState extends State<SendTab> {
 
           const SizedBox(height: 32),
 
+          // Loading indicator when processing files
+          if (_isLoadingFiles) ...[
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Theme.of(context).cardColor,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withAlpha((0.1 * 255).round()),
+                    blurRadius: 10,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Text(
+                      _loadingMessage,
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        fontWeight: FontWeight.w500,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 32),
+          ],
+
           // Selected Files
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 300),
@@ -431,14 +661,19 @@ class _SendTabState extends State<SendTab> {
                                     ),
                                   ),
                                   const SizedBox(height: 4),
-                                  Text(
-                                    '${(file.lengthSync() / 1024 / 1024).toStringAsFixed(2)} MB',
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      color: Theme.of(
-                                        context,
-                                      ).textTheme.bodySmall?.color,
-                                    ),
+                                  FutureBuilder<String>(
+                                    future: _getFileSizeText(file),
+                                    builder: (context, snapshot) {
+                                      return Text(
+                                        snapshot.data ?? 'Calculating...',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          color: Theme.of(
+                                            context,
+                                          ).textTheme.bodySmall?.color,
+                                        ),
+                                      );
+                                    },
                                   ),
                                 ],
                               ),
@@ -471,6 +706,8 @@ class _SendTabState extends State<SendTab> {
               itemBuilder: (context, index) {
                 final device = _discoveredDevices[index];
                 final isSending = _sendingByDeviceId[device.id] ?? false;
+                final sentSuccessfully =
+                    _sentSuccessfullyByDeviceId[device.id] ?? false;
 
                 return Container(
                   decoration: BoxDecoration(
@@ -508,11 +745,13 @@ class _SendTabState extends State<SendTab> {
                     ),
                     trailing: _selectedFiles.isNotEmpty
                         ? ElevatedButton(
-                            onPressed: isSending
+                            onPressed: (isSending || sentSuccessfully)
                                 ? null
                                 : () => _sendFilesToDevice(device),
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.indigo,
+                              backgroundColor: sentSuccessfully
+                                  ? Colors.green
+                                  : Colors.indigo,
                               foregroundColor: Colors.white,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12),
@@ -532,6 +771,8 @@ class _SendTabState extends State<SendTab> {
                                       color: Colors.white,
                                     ),
                                   )
+                                : sentSuccessfully
+                                ? const Icon(Icons.check, size: 20)
                                 : const Text('Send'),
                           )
                         : Container(
