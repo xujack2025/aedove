@@ -179,8 +179,8 @@ class _HomePageState extends State<HomePage>
     if (adLinkDurationData.isNotEmpty) {
       Map<String, dynamic> bannerItem = adLinkDurationData[adLinksIndex];
       String link = bannerItem['link'];
-      int show_duration = (bannerItem['show']);
-      int hide_duration = (bannerItem['hide']);
+      int showDuration = (bannerItem['show']);
+      int hideDuration = (bannerItem['hide']);
       _popupBannerLink = link;
       _reloadWebViewAD();
       if (_adWebViewController != null) {
@@ -188,7 +188,7 @@ class _HomePageState extends State<HomePage>
           urlRequest: URLRequest(url: WebUri(_popupBannerLink)),
         );
       }
-      _visibleADTimer(show_duration, hide_duration);
+      _visibleADTimer(showDuration, hideDuration);
     } else {
       debugPrint("Stopping Ads 2");
       adLinkDurationData = [];
@@ -428,10 +428,32 @@ class _HomePageState extends State<HomePage>
       ),
       body: Stack(
         children: [
-          // Main content
-          IndexedStack(
-            index: _currentTab.index,
-            children: const [ReceiveTab(), SendTab(), SettingsTab()],
+          // AdMob Banner Ad - positioned at top
+          if (_isBannerAdLoaded && _bannerAd != null)
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: Container(
+                color: Colors.white,
+                width: _bannerAd!.size.width.toDouble(),
+                height: _bannerAd!.size.height.toDouble(),
+                child: AdWidget(ad: _bannerAd!),
+              ),
+            ),
+
+          // Main content - offset by banner height
+          Positioned(
+            top: _isBannerAdLoaded && _bannerAd != null
+                ? _bannerAd!.size.height.toDouble()
+                : 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: IndexedStack(
+              index: _currentTab.index,
+              children: const [ReceiveTab(), SendTab(), SettingsTab()],
+            ),
           ),
 
           // Animated ad banner at the bottom
@@ -489,14 +511,6 @@ class _HomePageState extends State<HomePage>
       bottomNavigationBar: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // AdMob Banner Ad
-          if (_isBannerAdLoaded && _bannerAd != null)
-            Container(
-              color: Colors.white,
-              width: _bannerAd!.size.width.toDouble(),
-              height: _bannerAd!.size.height.toDouble(),
-              child: AdWidget(ad: _bannerAd!),
-            ),
           // Navigation Bar
           Container(
             decoration: BoxDecoration(
