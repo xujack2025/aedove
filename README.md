@@ -1,123 +1,168 @@
 # Aedove
 
-Cross‑platform, local‑network file sharing app built with Flutter.
+Aedove is a Flutter-based local network file sharing app built with Clean Architecture, BLoC, and dependency injection.
 
-Aedove lets you quickly send and receive files between devices on the same network — Android, iOS, macOS, Windows, Linux, and Web (Chrome). It supports selecting any files as well as picking media from the device gallery where supported.
+It allows Android, iOS, macOS, Windows to discover peers on the same LAN and transfer files directly over HTTP.
 
-## Key features
+## What it does
 
-- Discover nearby devices on the same Wi‑Fi/LAN
-- Send any files or media (images/videos) across platforms
-- Save received files to platform‑appropriate locations
-	- Android: Downloads (via MediaStore where possible)
-	- iOS: App Documents; media optionally to Photos (with permission)
-	- macOS: Downloads folder
-	- Windows/Linux: App data or user directories
-	- Web: Browser downloads
-- Per‑device send state (send to multiple devices independently)
-- App icons and product name configured for Windows, macOS, and Web
+- Discover nearby devices on the same Wi-Fi/LAN
+- Send files and media to selected devices
+- Receive transfer requests with per-file accept/deny
+- Track transfer progress and recently saved files
+- Save media/files using platform-appropriate storage behavior
 
-## Project structure (high‑level)
+## Current architecture
 
-- `lib/`
-	- `pages/tabs/send_tab.dart` – Select files/media and send to devices
-	- `pages/tabs/receive_tab.dart` – Receive requests and manage permissions
-	- `pages/tabs/settings_tab.dart` – App settings and configuration
-	- `services/`
-		- `device_discovery_service.dart` – LAN discovery and device registry
-		- `file_transfer_service.dart` – File send/receive flows
-		- `media_store_service.dart` – Facade for saving files cross‑platform
-		- `permission_service.dart` – Runtime permissions
-		- `notification_service.dart` – Local notifications (where supported)
-		- `background_service.dart` – Background task management
+This project follows a layered architecture:
+
+- Presentation layer (`lib/presentation`)
+	- Pages, feature widgets, and BLoC state management
+	- BLoCs: `app_init`, `ads`, `discovery`, `transfer`, `settings`
+- Domain layer (`lib/domain`)
+	- Entities, repository interfaces, use cases
+	- Pure business rules without Flutter/framework coupling
+- Data layer (`lib/data`)
+	- Repository implementations, data sources, and models
+	- Bridges domain APIs to low-level services
+- Service/infrastructure layer (`lib/services`)
+	- Device discovery, transfer server/client, media save, notification, permission
+	- Used by data sources as implementation details
+- DI bootstrap (`lib/di/service_locator.dart`)
+	- `get_it` registrations for data/domain/presentation wiring
+
+### High-level flow
+
+1. App starts with `AppInitBloc` and initializes background/network services.
+2. `DiscoveryBloc` streams online devices from discovery services.
+3. `SendTab` validates selected files and dispatches send use cases.
+4. `TransferBloc` handles incoming requests, progress updates, and saved-file events.
+5. `SettingsBloc` manages device name and notification preferences.
+
+## Project structure
+
+```text
+lib/
+	main.dart
+	di/
+		service_locator.dart
+	presentation/
+		bloc/
+			app_init/
+			ads/
+			discovery/
+			transfer/
+			settings/
+		pages/
+			home_page.dart
+			home_tab.dart
+			tabs/
+				send_tab.dart
+				receive_tab.dart
+				settings_tab.dart
+		widgets/
+			common/
+			home/
+			send/
+			receive/
+			settings/
+			transfer/
+	domain/
+		entities/
+		repositories/
+		usecases/
+			app_init/
+			ads/
+			discovery/
+			transfer/
+			settings/
+			device_info/
+			file_access/
+	data/
+		datasources/
+			app_init/
+			device/
+			device_info/
+			file_access/
+			notification/
+			permission/
+			settings/
+			transfer/
+		models/
+		repositories/
+	services/
+		background_service.dart
+		device_discovery_service.dart
+		file_transfer_service.dart
+		media_store_service.dart
+		notification_service.dart
+		permission_service.dart
+```
 
 ## Getting started
 
-Prerequisites:
-- Flutter (stable) installed (`flutter doctor` should pass)
-- Platform toolchains for the targets you care about
+### Prerequisites
 
-Run the app:
+- Flutter stable SDK (`flutter doctor` should be clean)
+- Platform toolchain for your target device(s)
 
-```
+### Run
+
+```bash
 flutter pub get
 flutter run -d <device-id>
 ```
 
-Common device targets:
-- Android device/emulator
-- iOS simulator/device (Xcode required on macOS)
-- macOS desktop: `flutter run -d macos`
-- Windows desktop: `flutter run -d windows` (requires Visual Studio 2022 Desktop C++)
-- Linux desktop (e.g., Ubuntu): `flutter run -d linux` (requires GTK, CMake, Ninja, Clang)
-- Web (Chrome): `flutter run -d chrome`
+Useful targets:
 
-## Platform notes
+- macOS: `flutter run -d macos`
+- iOS simulator/device: `flutter run -d <ios-device-id>`
+- Android: `flutter run -d <android-device-id>`
+
+## Platform behavior
 
 ### Android
-- Uses MediaStore when possible to save to Downloads.
-- Requests storage permission where required by Android version.
+
+- Uses MediaStore/file APIs depending on Android version.
+- Requests runtime permissions as needed.
 
 ### iOS
-- Files are saved to the app’s Documents directory by default.
-- Photos permission is requested only when saving media to Photos.
-- Local network discovery requires the appropriate Info.plist entries (already included).
+
+- Discovery works via Bonjour/local network.
+- Files are received in app-accessible storage; media can be saved to Photos when permitted.
+- Running on a physical iPhone requires valid signing/team setup in Xcode.
 
 ### macOS
-- Files are saved to the user’s Downloads folder.
-- No explicit storage permission dialog; macOS may prompt when accessing protected locations.
 
-### Windows
-- Desktop build requires Visual Studio 2022 with “Desktop development with C++” and Windows SDK.
-- Icons and product metadata are configured under `windows/runner`.
+- LAN discovery and transfer services run locally.
+- Received files are saved using desktop file APIs.
+- Ad banner is not used on macOS.
 
-## Permissions and configuration
+## Testing
 
-This project uses `permission_handler` and declares platform permissions as needed.
+Run all tests:
 
-- iOS (Info.plist – already present):
-	- `NSPhotoLibraryUsageDescription`
-	- `NSPhotoLibraryAddUsageDescription`
-	- `NSLocalNetworkUsageDescription`
-	- `NSLocationWhenInUseUsageDescription` (if required by discovery)
-	- Bonjour services entries
-
-- Android: storage permissions are requested at runtime where needed.
-
-## Build and release
-
-Android APK/AAB:
-```
-flutter build apk   # or: flutter build appbundle
+```bash
+flutter test
 ```
 
-iOS (on macOS):
-```
-flutter build ipa
-```
-Then open Xcode to archive and distribute, or use the generated .ipa file.
-
-macOS:
-```
-flutter build macos
-```
+This repository includes tests for BLoCs and presentation/data helpers (see `test/`).
 
 ## Troubleshooting
 
-- Discovery not working on Web: browsers can’t run servers or broadcast on LAN; connect directly to a device by IP or use a desktop/mobile build for full discovery.
-- Windows build errors: ensure Visual Studio 2022 with Windows SDK is installed.
-- iOS Photos save denied: verify Photos permissions are granted in Settings.
+- Device not found: verify both devices are on the same LAN/Wi-Fi and app is active.
+- iOS physical device build fails: open Xcode, select a valid Team, and ensure bundle identifier/profile are valid.
+- Transfer request fails: check firewall/network isolation and retry with both apps in foreground.
 
 ## Tech stack
 
-- Flutter, Dart
-- Packages: file_picker, image_picker, permission_handler, path_provider, mime, gal, connectivity_plus, network_info_plus, device_info_plus, bonsoir, socket_io_client, intl, image, awesome_notifications, flutter_inappwebview, url_launcher, open_file
-
-
-## Contributing
-
-Issues and pull requests are welcome. Please run `flutter analyze` before submitting a PR.
+- Flutter + Dart
+- `flutter_bloc`, `equatable`, `get_it`
+- `file_picker`, `wechat_assets_picker`, `photo_manager`, `gal`
+- `bonsoir`, `multicast_dns`, `network_info_plus`, `connectivity_plus`
+- `permission_handler`, `shared_preferences`, `open_file`
+- `awesome_notifications`, `flutter_inappwebview`, `google_mobile_ads`
 
 ## License
 
-This project is provided as‑is. Add your preferred license here (e.g., MIT, Apache‑2.0).
+No license has been defined yet.
