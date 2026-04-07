@@ -1,13 +1,16 @@
+import 'package:aedove/domain/entities/device_entity.dart';
+import 'package:aedove/presentation/bloc/discovery/discovery_bloc.dart';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:wechat_assets_picker/wechat_assets_picker.dart';
-import 'package:aedove/services/device_discovery_service.dart';
 import 'package:aedove/services/file_transfer_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path/path.dart' as p;
 import 'package:mime/mime.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+
 
 class SendTab extends StatefulWidget {
   const SendTab({super.key});
@@ -18,7 +21,6 @@ class SendTab extends StatefulWidget {
 
 class _SendTabState extends State<SendTab> {
   List<File> _selectedFiles = [];
-  List<DeviceInfo> _discoveredDevices = [];
   final Map<String, bool> _sendingByDeviceId = {};
   final Map<String, bool> _sentSuccessfullyByDeviceId = {};
   String _deviceId = '';
@@ -43,21 +45,6 @@ class _SendTabState extends State<SendTab> {
     } catch (e) {
       // ignore errors reading prefs
     }
-    _setupStreams();
-  }
-
-  void _setupStreams() {
-    // Listen to device discovery stream
-    DeviceDiscoveryService.devicesStream.listen((devices) {
-      final filtered = _deviceId.isNotEmpty
-          ? devices.where((d) => d.id != _deviceId).toList()
-          : devices;
-      if (mounted) {
-        setState(() {
-          _discoveredDevices = filtered;
-        });
-      }
-    });
   }
 
   Future<void> _pickFiles() async {
@@ -375,7 +362,7 @@ class _SendTabState extends State<SendTab> {
     }
   }
 
-  Future<void> _sendFilesToDevice(DeviceInfo device) async {
+  Future<void> _sendFilesToDevice(DeviceEntity device) async {
     if (_selectedFiles.isEmpty) {
       _showErrorSnackBar('Please select files to send');
       return;
@@ -480,6 +467,10 @@ class _SendTabState extends State<SendTab> {
 
   @override
   Widget build(BuildContext context) {
+    final discoveryState = context.watch<DiscoveryBloc>().state;
+    final discoveredDevices = discoveryState.devices
+        .where((d) => d.id != _deviceId)
+        .toList();
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(vertical: 0, horizontal: 24.0),
       physics: const BouncingScrollPhysics(),
@@ -697,14 +688,14 @@ class _SendTabState extends State<SendTab> {
           ),
           const SizedBox(height: 16),
 
-          if (_discoveredDevices.isNotEmpty) ...[
+          if (discoveredDevices.isNotEmpty) ...[
             ListView.separated(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              itemCount: _discoveredDevices.length,
+              itemCount: discoveredDevices.length,
               separatorBuilder: (context, index) => const SizedBox(height: 12),
               itemBuilder: (context, index) {
-                final device = _discoveredDevices[index];
+                final device = discoveredDevices[index];
                 final isSending = _sendingByDeviceId[device.id] ?? false;
                 final sentSuccessfully =
                     _sentSuccessfullyByDeviceId[device.id] ?? false;

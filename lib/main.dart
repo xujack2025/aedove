@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:aedove/di/service_locator.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 // import 'package:flutter_localizations/flutter_localizations.dart';
@@ -8,7 +9,7 @@ import 'package:aedove/services/background_service.dart';
 import 'package:aedove/services/notification_service.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 
-void main() async {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // Initialize Google Mobile Ads SDK only on supported platforms (Android and iOS)
   if (Platform.isAndroid || Platform.isIOS) {
@@ -27,6 +28,8 @@ void main() async {
       systemNavigationBarIconBrightness: Brightness.dark,
     ),
   );
+
+  await setupServiceLocator();
 
   runApp(const AeDoveApp());
 }

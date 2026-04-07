@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:http/http.dart' as http;
 import 'package:permission_handler/permission_handler.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -15,6 +16,10 @@ import 'package:aedove/services/device_discovery_service.dart';
 import 'package:aedove/constant.dart';
 import 'package:aedove/ad_web_view.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
+
+import '../di/service_locator.dart';
+import '../presentation/bloc/discovery/discovery_bloc.dart';
+import '../presentation/bloc/discovery/discovery_event.dart';
 
 enum HomeTab {
   receive(Icons.wifi),
@@ -452,7 +457,15 @@ class _HomePageState extends State<HomePage>
             bottom: 0,
             child: IndexedStack(
               index: _currentTab.index,
-              children: const [ReceiveTab(), SendTab(), SettingsTab()],
+              children: [
+                const ReceiveTab(),
+                BlocProvider(
+                  create: (_) =>
+                      sl<DiscoveryBloc>()..add(const DiscoveryStarted()),
+                  child: const SendTab(),
+                ),
+                const SettingsTab(),
+              ],
             ),
           ),
 

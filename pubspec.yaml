@@ -40,6 +40,9 @@ dependencies:
   open_file: ^3.5.10
   google_mobile_ads: ^6.0.0
   flutter_dotenv: ^5.2.1
+  flutter_bloc: ^9.1.1
+  equatable: ^2.0.8
+  get_it: ^9.2.1
 
 
 dev_dependencies:
