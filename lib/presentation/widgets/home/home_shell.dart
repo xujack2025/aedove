@@ -26,32 +26,31 @@ class HomeShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hasBanner =
+        isBannerAdLoaded &&
+        bannerAd != null &&
+        bannerAd!.size.width > 0 &&
+        bannerAd!.size.height > 0;
+
     return Scaffold(
       appBar: appBar,
-      body: Stack(
+      body: Column(
         children: [
-          if (isBannerAdLoaded && bannerAd != null)
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: Container(
-                color: Colors.white,
-                width: bannerAd!.size.width.toDouble(),
-                height: bannerAd!.size.height.toDouble(),
-                child: AdWidget(ad: bannerAd!),
-              ),
+          if (hasBanner)
+            Container(
+              color: Colors.white,
+              width: double.infinity,
+              height: bannerAd!.size.height.toDouble(),
+              child: AdWidget(ad: bannerAd!),
             ),
-          Positioned(
-            top: isBannerAdLoaded && bannerAd != null
-                ? bannerAd!.size.height.toDouble()
-                : 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: IndexedStack(index: currentTab.index, children: tabs),
+          Expanded(
+            child: Stack(
+              children: [
+                IndexedStack(index: currentTab.index, children: tabs),
+                overlay,
+              ],
+            ),
           ),
-          overlay,
         ],
       ),
       bottomNavigationBar: Column(

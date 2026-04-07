@@ -51,10 +51,14 @@ class NotificationService {
       }
     });
 
-    // Listen to notification taps
-    AwesomeNotifications().setListeners(
-      onActionReceivedMethod: _onNotificationTapped,
-    );
+    // On iOS, some awesome_notifications versions may dispatch action
+    // callbacks from a non-platform thread. Skip listener registration there
+    // to avoid channel-thread violations.
+    if (!Platform.isIOS) {
+      AwesomeNotifications().setListeners(
+        onActionReceivedMethod: _onNotificationTapped,
+      );
+    }
   }
 
   static Future<void> showFileTransferNotification({

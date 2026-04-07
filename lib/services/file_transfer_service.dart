@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:aedove/services/notification_service.dart';
+import 'package:aedove/services/device_discovery_service.dart';
 import 'package:aedove/services/media_store_service.dart';
 import 'package:path/path.dart' as p;
 
@@ -605,6 +606,12 @@ class FileTransferService {
       transferRequest.targetDeviceIP = targetDeviceIP;
       transferRequest.localFilePath = filePath;
 
+      final resolvedTarget = await _resolveTargetEndpoint(
+        targetDeviceId: targetDeviceId,
+        targetDeviceIP: targetDeviceIP,
+        targetDevicePort: targetDevicePort,
+      );
+
       // Keep track of outgoing file so we can send bytes if the receiver accepts
       // Note: We do NOT add outgoing requests to _pendingRequests
       // Only incoming requests from other devices should appear there
@@ -614,65 +621,98 @@ class FileTransferService {
       bool sent = false;
       Exception? lastError;
 
+      final targetHosts = await _buildTargetHosts(resolvedTarget.ip);
+
       // Build a prioritized port list: preferred (if provided), current server port, then others
       final Set<int> portsSet = {
-        if (targetDevicePort != null) targetDevicePort,
+        if (resolvedTarget.port != null) resolvedTarget.port!,
         getPrimaryPort(),
         _currentPort,
         ..._fileTransferPorts,
       };
-      final portsToTry = portsSet.toList();
-      for (final port in portsToTry) {
-        final client = http.Client();
-        try {
-          final uri = Uri(
-            scheme: 'http',
-            host: targetDeviceIP,
-            port: port,
-            path: '/request',
+      const maxAttempts = 4;
+      for (int attempt = 1; attempt <= maxAttempts && !sent; attempt++) {
+        if (attempt > 1) {
+          final refreshed = await _resolveTargetEndpoint(
+            targetDeviceId: targetDeviceId,
+            targetDeviceIP: targetHosts.isNotEmpty
+                ? targetHosts.first
+                : targetDeviceIP,
+            targetDevicePort: resolvedTarget.port,
           );
-          if (_verbose) {
-            debugPrint('Trying to send request to: $uri');
+          targetHosts
+            ..clear()
+            ..addAll(await _buildTargetHosts(refreshed.ip));
+          if (refreshed.port != null && !portsSet.contains(refreshed.port)) {
+            portsSet.add(refreshed.port!);
+          }
+        }
+
+        final portsToTry = portsSet.toList();
+
+        for (final host in targetHosts) {
+          for (final port in portsToTry) {
+            final client = http.Client();
+            try {
+              final uri = Uri(
+                scheme: 'http',
+                host: host,
+                port: port,
+                path: '/request',
+              );
+              if (_verbose) {
+                debugPrint(
+                  'Trying to send request to: $uri (attempt $attempt)',
+                );
+              }
+
+              final response = await client
+                  .post(
+                    uri,
+                    headers: {'Content-Type': 'application/json'},
+                    body: jsonEncode(transferRequest.toJson()),
+                  )
+                  .timeout(const Duration(seconds: 4));
+
+              if (response.statusCode == 200) {
+                debugPrint(
+                  'Successfully sent file transfer request to $host:$port',
+                );
+                await NotificationService.showFileSentNotification(
+                  fileName: fileName,
+                  fileSize: _formatFileSize(fileSize),
+                );
+                sent = true;
+                break;
+              } else if (_verbose) {
+                debugPrint(
+                  'Got non-200 response from $host:$port: ${response.statusCode}',
+                );
+              }
+            } catch (e) {
+              lastError = Exception(e.toString());
+              if (_verbose) {
+                debugPrint('Failed to send to $host:$port: $e');
+              }
+              continue;
+            } finally {
+              client.close();
+            }
           }
 
-          final response = await client
-              .post(
-                uri,
-                headers: {'Content-Type': 'application/json'},
-                body: jsonEncode(transferRequest.toJson()),
-              )
-              .timeout(
-                const Duration(seconds: 3),
-              ); // Increased timeout slightly
-
-          if (response.statusCode == 200) {
-            debugPrint('Successfully sent file transfer request to port $port');
-            // Show notification that file was ready to be sent
-            await NotificationService.showFileSentNotification(
-              fileName: fileName,
-              fileSize: _formatFileSize(fileSize),
-            );
-            sent = true;
+          if (sent) {
             break;
-          } else if (_verbose) {
-            debugPrint(
-              'Got non-200 response from port $port: ${response.statusCode}',
-            );
           }
-        } catch (e) {
-          lastError = e as Exception;
-          if (_verbose) {
-            debugPrint('Failed to send to port $port: $e');
-          }
-          continue;
-        } finally {
-          client.close();
+        }
+
+        if (!sent && attempt < maxAttempts) {
+          await Future<void>.delayed(const Duration(seconds: 2));
         }
       }
 
       if (!sent) {
         debugPrint('Failed to send file transfer request to target device');
-        if (lastError != null && _verbose) {
+        if (lastError != null) {
           debugPrint('Last error: $lastError');
         }
         _pendingRequests.remove(requestId);
@@ -836,6 +876,55 @@ class FileTransferService {
         return 'text';
       default:
         return 'file';
+    }
+  }
+
+  static Future<List<String>> _buildTargetHosts(String rawHost) async {
+    final host = rawHost.trim();
+    if (host.isEmpty) {
+      return const [];
+    }
+
+    final hosts = <String>[host];
+    final isIpv4 = RegExp(r'^\d{1,3}(\.\d{1,3}){3}$').hasMatch(host);
+    final isIpv6 = host.contains(':');
+
+    if (!isIpv4 && !isIpv6) {
+      try {
+        final resolved = await InternetAddress.lookup(host);
+        for (final address in resolved) {
+          if (address.type == InternetAddressType.IPv4 &&
+              !hosts.contains(address.address)) {
+            hosts.add(address.address);
+          }
+        }
+      } catch (_) {
+        // Keep original host if DNS resolution fails.
+      }
+    }
+
+    return hosts;
+  }
+
+  static Future<({String ip, int? port})> _resolveTargetEndpoint({
+    required String targetDeviceId,
+    required String targetDeviceIP,
+    required int? targetDevicePort,
+  }) async {
+    try {
+      final liveDevice = DeviceDiscoveryService.discoveredDevices.firstWhere(
+        (device) => device.id == targetDeviceId,
+      );
+
+      final resolvedIp = liveDevice.ip.isNotEmpty
+          ? liveDevice.ip
+          : targetDeviceIP;
+      final resolvedPort = liveDevice.port > 0
+          ? liveDevice.port
+          : targetDevicePort;
+      return (ip: resolvedIp, port: resolvedPort);
+    } catch (_) {
+      return (ip: targetDeviceIP, port: targetDevicePort);
     }
   }
 

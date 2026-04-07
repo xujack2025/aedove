@@ -16,14 +16,6 @@ class ReceiveFilePathHelper {
     return filePath.replaceFirst('gallery://', '');
   }
 
-  static String gallerySavedMessage(String fileName) {
-    return '$fileName saved to gallery. Open your Photos/Gallery app to view.';
-  }
-
-  static String gallerySavedHint() {
-    return 'File saved to gallery. Open your Photos/Gallery app to view.';
-  }
-
   static String shortPath(String fullPath) {
     final parts = fullPath.split('/');
     if (parts.length <= 5) {

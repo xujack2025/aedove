@@ -92,8 +92,8 @@ class _HomePageState extends State<HomePage>
     setState(() => _refreshing = true);
     _refreshController.repeat();
 
-    _discoveryBloc.add(const DiscoveryStopped());
-    await Future<void>.delayed(const Duration(milliseconds: 200));
+    // Keep the discovery service alive while refreshing to avoid socket churn
+    // and transient disconnects on desktop platforms.
     _discoveryBloc.add(const DiscoveryStarted());
     await Future<void>.delayed(const Duration(milliseconds: 1000));
 

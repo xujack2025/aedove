@@ -70,6 +70,7 @@ class DeviceDiscoveryService {
 
   static bool _isStarted = false;
   static bool _isInitializing = false;
+  static bool _isStopping = false;
   static final Map<String, DeviceInfo> _discoveredDevices = {};
   static final StreamController<List<DeviceInfo>> _devicesController =
       StreamController<List<DeviceInfo>>.broadcast();
@@ -93,6 +94,7 @@ class DeviceDiscoveryService {
 
     try {
       _isInitializing = true;
+      _isStopping = false;
       debugPrint('Starting device discovery service...');
 
       // Get and store current device ID/IP first
@@ -132,6 +134,7 @@ class DeviceDiscoveryService {
   static Future<void> stop() async {
     debugPrint('Stopping device discovery service...');
     _isStarted = false;
+    _isStopping = true;
 
     try {
       // Send goodbye message to notify other devices we're going offline
@@ -208,6 +211,7 @@ class DeviceDiscoveryService {
       _reconnectTimer = null;
       _mdnsRefreshTimer = null;
       _isInitializing = false;
+      _isStopping = false;
     }
   }
 
@@ -495,7 +499,12 @@ class DeviceDiscoveryService {
 
   static Future<void> _startUdpBroadcast() async {
     debugPrint('Starting UDP broadcast service...');
-    await _initializeUdpSocket();
+    try {
+      await _initializeUdpSocket();
+    } catch (e) {
+      // Keep discovery alive with mDNS even if UDP bind temporarily fails.
+      debugPrint('UDP broadcast init failed, continuing with mDNS only: $e');
+    }
   }
 
   static Future<void> _initializeUdpSocket() async {
@@ -529,6 +538,10 @@ class DeviceDiscoveryService {
           debugPrint('UDP socket error: $e');
           // Don't reconnect immediately on every error to avoid loop
           // Only reconnect if socket is actually broken
+          if (!_isStarted || _isStopping || _isInitializing) {
+            return;
+          }
+
           if (e.toString().contains('Closed') ||
               e.toString().contains('Bad file descriptor')) {
             try {
@@ -539,6 +552,14 @@ class DeviceDiscoveryService {
           }
         },
         onDone: () {
+          if (!_isStarted || _isStopping || _isInitializing) {
+            if (_verbose) {
+              debugPrint('UDP socket closed during normal shutdown/restart');
+            }
+            _udpSocket = null;
+            return;
+          }
+
           debugPrint('UDP socket closed unexpectedly');
           try {
             _udpSocket?.close();
