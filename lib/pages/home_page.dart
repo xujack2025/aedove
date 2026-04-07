@@ -20,6 +20,8 @@ import 'package:google_mobile_ads/google_mobile_ads.dart';
 import '../di/service_locator.dart';
 import '../presentation/bloc/discovery/discovery_bloc.dart';
 import '../presentation/bloc/discovery/discovery_event.dart';
+import '../presentation/bloc/transfer/transfer_bloc.dart';
+import '../presentation/bloc/transfer/transfer_event.dart';
 
 enum HomeTab {
   receive(Icons.wifi),
@@ -458,7 +460,11 @@ class _HomePageState extends State<HomePage>
             child: IndexedStack(
               index: _currentTab.index,
               children: [
-                const ReceiveTab(),
+                BlocProvider(
+                  create: (_) =>
+                      sl<TransferBloc>()..add(const TransferStarted()),
+                  child: const ReceiveTab(),
+                ),
                 BlocProvider(
                   create: (_) =>
                       sl<DiscoveryBloc>()..add(const DiscoveryStarted()),

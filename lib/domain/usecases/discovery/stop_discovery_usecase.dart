@@ -1,4 +1,4 @@
-import '../repositories/device_repository.dart';
+import '../../repositories/device_repository.dart';
 
 class StopDiscoveryUsecase {
   final DeviceRepository repository;

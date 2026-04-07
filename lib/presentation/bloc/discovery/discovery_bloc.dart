@@ -3,9 +3,9 @@ import 'dart:async';
 import 'package:aedove/domain/entities/device_entity.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../../../domain/usecases/start_discovery_usecase.dart';
-import '../../../domain/usecases/stop_discovery_usecase.dart';
-import '../../../domain/usecases/watch_devices_usecase.dart';
+import '../../../domain/usecases/discovery/start_discovery_usecase.dart';
+import '../../../domain/usecases/discovery/stop_discovery_usecase.dart';
+import '../../../domain/usecases/discovery/watch_devices_usecase.dart';
 import 'discovery_event.dart';
 import 'discovery_state.dart';
 

@@ -1,95 +1,116 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
-	<dict>
-		<key>CADisableMinimumFrameDurationOnPhone</key>
-		<true />
-		<key>CFBundleDevelopmentRegion</key>
-		<string>$(DEVELOPMENT_LANGUAGE)</string>
-		<key>GADApplicationIdentifier</key>
-		<string>ca-app-pub-5554226841599445~3910149716</string>
-		<key>CFBundleDisplayName</key>
-		<string>Aedove</string>
-		<key>CFBundleExecutable</key>
-		<string>$(EXECUTABLE_NAME)</string>
-		<key>CFBundleIdentifier</key>
-		<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
-		<key>CFBundleInfoDictionaryVersion</key>
-		<string>6.0</string>
-		<key>CFBundleName</key>
-		<string>aedove</string>
-		<key>CFBundlePackageType</key>
-		<string>APPL</string>
-		<key>CFBundleShortVersionString</key>
-		<string>$(FLUTTER_BUILD_NAME)</string>
-		<key>CFBundleSignature</key>
-		<string>????</string>
-		<key>CFBundleURLTypes</key>
-		<array>
-			<dict>
-				<key>CFBundleTypeRole</key>
-				<string>Editor</string>
-				<key>CFBundleURLSchemes</key>
-				<array>
-					<string>ShareMedia-$(PRODUCT_BUNDLE_IDENTIFIER)</string>
-				</array>
-			</dict>
-		</array>
-		<key>CFBundleVersion</key>
-		<string>$(FLUTTER_BUILD_NUMBER)</string>
-		<key>LSRequiresIPhoneOS</key>
-		<true />
-		<key>LSSupportsOpeningDocumentsInPlace</key>
-		<true />
-		<key>NSBonjourServices</key>
-		<array>
-			<string>_aedove._tcp</string>
-			<string>_aedove._tcp.</string>
-		</array>
-		<key>NSLocalNetworkUsageDescription</key>
-		<string>Discover nearby devices on the local WiFi to let users send and receive files. This
-			is used only for device discovery and local transfers; no location, device list, or
-			personal data is collected or sent to our servers.</string>	
-		<key>NSUserTrackingUsageDescription</key>
-		<string>This app uses advertising to support free file sharing. Your data is used to provide personalized ads and measure ad performance.</string>		
-		<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-		<string>Discover nearby devices on the local WiFi to let users send and receive files. This
+<dict>
+	<key>CADisableMinimumFrameDurationOnPhone</key>
+	<true/>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleDisplayName</key>
+	<string>Aedove</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>aedove</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(FLUTTER_BUILD_NAME)</string>
+	<key>CFBundleSignature</key>
+	<string>????</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>ShareMedia-$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+			</array>
+		</dict>
+	</array>
+	<key>CFBundleVersion</key>
+	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>GADApplicationIdentifier</key>
+	<string>ca-app-pub-5554226841599445~3910149716</string>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_aedove._tcp</string>
+		<string>_aedove._tcp.</string>
+	</array>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Discover nearby devices on the local WiFi to let users send and receive files. This
 			is used only for device discovery and local transfers; no location, device list, or
 			personal data is collected or sent to our servers.</string>
-		<key>NSLocationWhenInUseUsageDescription</key>
-		<string>Discover nearby devices on the local WiFi to let users send and receive files. This
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Discover nearby devices on the local WiFi to let users send and receive files. This
 			is used only for device discovery and local transfers; no location, device list, or
 			personal data is collected or sent to our servers.</string>
-		<key>NSPhotoLibraryAddUsageDescription</key>
-		<string>Allow saving received photos and videos to your library. Items are saved only when
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Discover nearby devices on the local WiFi to let users send and receive files. This
+			is used only for device discovery and local transfers; no location, device list, or
+			personal data is collected or sent to our servers.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Allow saving received photos and videos to your library. Items are saved only when
 			you confirm.</string>
-		<key>NSPhotoLibraryUsageDescription</key>
-		<string>Allow selecting photos and videos to share with nearby devices. Photos are accessed
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Allow selecting photos and videos to share with nearby devices. Photos are accessed
 			only when you choose them and are not uploaded without permission.</string>
-		<key>UIApplicationSupportsIndirectInputEvents</key>
-		<true />
-		<key>UIFileSharingEnabled</key>
-		<true />
-		<key>UILaunchStoryboardName</key>
-		<string>LaunchScreen</string>
-		<key>UIMainStoryboardFile</key>
-		<string>Main</string>
-		<key>UISupportedInterfaceOrientations</key>
-		<array>
-			<string>UIInterfaceOrientationPortrait</string>
-			<string>UIInterfaceOrientationLandscapeLeft</string>
-			<string>UIInterfaceOrientationLandscapeRight</string>
-		</array>
-		<key>UISupportedInterfaceOrientations~ipad</key>
-		<array>
-			<string>UIInterfaceOrientationPortrait</string>
-			<string>UIInterfaceOrientationPortraitUpsideDown</string>
-			<string>UIInterfaceOrientationLandscapeLeft</string>
-			<string>UIInterfaceOrientationLandscapeRight</string>
-		</array>
-		<key>UISupportsDocumentBrowser</key>
-		<true />
-		<key>UIStatusBarHidden</key>
-		<false />
+	<key>NSUserTrackingUsageDescription</key>
+	<string>This app uses advertising to support free file sharing. Your data is used to provide personalized ads and measure ad performance.</string>
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<false/>
+		<key>UISceneConfigurations</key>
+		<dict>
+			<key>UIWindowSceneSessionRoleApplication</key>
+			<array>
+				<dict>
+					<key>UISceneClassName</key>
+					<string>UIWindowScene</string>
+					<key>UISceneConfigurationName</key>
+					<string>flutter</string>
+					<key>UISceneDelegateClassName</key>
+					<string>FlutterSceneDelegate</string>
+					<key>UISceneStoryboardFile</key>
+					<string>Main</string>
+				</dict>
+			</array>
+		</dict>
 	</dict>
+	<key>UIApplicationSupportsIndirectInputEvents</key>
+	<true/>
+	<key>UIFileSharingEnabled</key>
+	<true/>
+	<key>UILaunchStoryboardName</key>
+	<string>LaunchScreen</string>
+	<key>UIMainStoryboardFile</key>
+	<string>Main</string>
+	<key>UIStatusBarHidden</key>
+	<false/>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>UISupportsDocumentBrowser</key>
+	<true/>
+</dict>
 </plist>
