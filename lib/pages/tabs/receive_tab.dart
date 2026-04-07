@@ -3,17 +3,18 @@ import 'dart:io';
 import 'package:aedove/domain/entities/transfer_progress_entity.dart';
 import 'package:aedove/domain/entities/transfer_request_entity.dart';
 import 'package:aedove/domain/entities/transfer_status.dart';
+import 'package:aedove/domain/usecases/file_access/open_file_usecase.dart';
+import 'package:aedove/domain/usecases/file_access/show_in_file_manager_usecase.dart';
 import 'package:aedove/presentation/bloc/transfer/transfer_bloc.dart';
 import 'package:aedove/presentation/bloc/transfer/transfer_event.dart';
 import 'package:aedove/presentation/bloc/transfer/transfer_state.dart';
-import 'package:aedove/services/media_store_service.dart';
-import 'package:aedove/services/permission_service.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:network_info_plus/network_info_plus.dart';
-import 'package:permission_handler/permission_handler.dart' as ph;
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../di/service_locator.dart';
 
 class ReceiveTab extends StatefulWidget {
   const ReceiveTab({super.key});
@@ -24,9 +25,12 @@ class ReceiveTab extends StatefulWidget {
 
 class _ReceiveTabState extends State<ReceiveTab>
     with SingleTickerProviderStateMixin {
+  final OpenFileUsecase _openFileUsecase = sl<OpenFileUsecase>();
+  final ShowInFileManagerUsecase _showInFileManagerUsecase =
+      sl<ShowInFileManagerUsecase>();
+
   String _deviceName = 'My Device';
   String _ipAddress = 'Unknown';
-  bool _permissionsPromptShown = false;
 
   late final AnimationController _pulseController;
   late final Animation<double> _pulseAnimation;
@@ -77,83 +81,8 @@ class _ReceiveTabState extends State<ReceiveTab>
       if (storedName != null && storedName.isNotEmpty) {
         setState(() => _deviceName = storedName);
       }
-
-      await _ensurePermissions();
     } catch (e) {
       debugPrint('Error getting device info: $e');
-    }
-  }
-
-  Future<void> _ensurePermissions() async {
-    if (Platform.isWindows ||
-        Platform.isMacOS ||
-        Platform.isLinux ||
-        Platform.isIOS) {
-      return;
-    }
-
-    try {
-      final storageStatus = Platform.isAndroid
-          ? await ph.Permission.storage.status
-          : ph.PermissionStatus.granted;
-      final locationStatus = Platform.isAndroid
-          ? await ph.Permission.location.status
-          : ph.PermissionStatus.granted;
-
-      if ((storageStatus.isGranted || storageStatus.isLimited) &&
-          (locationStatus.isGranted || locationStatus.isLimited)) {
-        return;
-      }
-
-      final storageGranted = await PermissionService.requestStoragePermission();
-      final locationGranted =
-          await PermissionService.requestLocationPermission();
-
-      if (storageGranted && locationGranted) return;
-
-      if (_permissionsPromptShown) return;
-      _permissionsPromptShown = true;
-
-      if (!mounted) return;
-      WidgetsBinding.instance.addPostFrameCallback((_) async {
-        if (!mounted) return;
-        await showDialog<void>(
-          context: context,
-          builder: (context) {
-            return AlertDialog(
-              title: const Text('Permissions required'),
-              content: const Text(
-                'Storage and/or location permissions are required for receiving files and discovering devices.\n\n'
-                'You can retry granting permissions or open app settings to enable them.',
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () async {
-                    Navigator.of(context).pop();
-                    _permissionsPromptShown = false;
-                    await _ensurePermissions();
-                  },
-                  child: const Text('Retry'),
-                ),
-                if (Platform.isAndroid || Platform.isIOS)
-                  TextButton(
-                    onPressed: () async {
-                      Navigator.of(context).pop();
-                      await ph.openAppSettings();
-                    },
-                    child: const Text('Open Settings'),
-                  ),
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Ignore'),
-                ),
-              ],
-            );
-          },
-        );
-      });
-    } catch (e) {
-      debugPrint('Error requesting permissions: $e');
     }
   }
 
@@ -866,8 +795,9 @@ class _ReceiveTabState extends State<ReceiveTab>
                       color: Colors.blue,
                       onTap: () async {
                         Navigator.of(dialogContext).pop();
-                        final success =
-                            await MediaStoreService.showInFileManager(filePath);
+                        final success = await _showInFileManagerUsecase(
+                          filePath,
+                        );
                         if (!success && mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
@@ -886,9 +816,7 @@ class _ReceiveTabState extends State<ReceiveTab>
                       color: Colors.green,
                       onTap: () async {
                         Navigator.of(dialogContext).pop();
-                        final success = await MediaStoreService.openFile(
-                          filePath,
-                        );
+                        final success = await _openFileUsecase(filePath);
                         if (!success && mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(

@@ -3,11 +3,13 @@ import 'package:get_it/get_it.dart';
 import '../data/repositories/device_repository_impl.dart';
 import '../data/repositories/ad_repository_impl.dart';
 import '../data/repositories/app_init_repository_impl.dart';
+import '../data/repositories/file_access_repository_impl.dart';
 import '../data/repositories/settings_repository_impl.dart';
 import '../data/repositories/transfer_repository_impl.dart';
 import '../domain/repositories/ad_repository.dart';
 import '../domain/repositories/app_init_repository.dart';
 import '../domain/repositories/device_repository.dart';
+import '../domain/repositories/file_access_repository.dart';
 import '../domain/repositories/settings_repository.dart';
 import '../domain/repositories/transfer_repository.dart';
 import '../domain/usecases/app_init/initialize_app_usecase.dart';
@@ -21,6 +23,9 @@ import '../domain/usecases/settings/save_device_name_usecase.dart';
 import '../domain/usecases/settings/set_notifications_enabled_usecase.dart';
 import '../domain/usecases/transfer/accept_transfer_usecase.dart';
 import '../domain/usecases/transfer/deny_transfer_usecase.dart';
+import '../domain/usecases/file_access/open_file_usecase.dart';
+import '../domain/usecases/file_access/show_in_file_manager_usecase.dart';
+import '../domain/usecases/transfer/send_file_usecase.dart';
 import '../domain/usecases/transfer/watch_file_saved_usecase.dart';
 import '../domain/usecases/transfer/watch_progress_usecase.dart';
 import '../domain/usecases/transfer/watch_requests_usecase.dart';
@@ -59,6 +64,10 @@ Future<void> setupServiceLocator() async {
 
   sl.registerLazySingleton<WatchRequestsUsecase>(
     () => WatchRequestsUsecase(sl<TransferRepository>()),
+  );
+
+  sl.registerLazySingleton<SendFileUsecase>(
+    () => SendFileUsecase(sl<TransferRepository>()),
   );
 
   sl.registerLazySingleton<WatchProgressUsecase>(
@@ -138,5 +147,17 @@ Future<void> setupServiceLocator() async {
       saveDeviceNameUsecase: sl<SaveDeviceNameUsecase>(),
       setNotificationsEnabledUsecase: sl<SetNotificationsEnabledUsecase>(),
     ),
+  );
+
+  sl.registerLazySingleton<FileAccessRepository>(
+    () => const FileAccessRepositoryImpl(),
+  );
+
+  sl.registerLazySingleton<OpenFileUsecase>(
+    () => OpenFileUsecase(sl<FileAccessRepository>()),
+  );
+
+  sl.registerLazySingleton<ShowInFileManagerUsecase>(
+    () => ShowInFileManagerUsecase(sl<FileAccessRepository>()),
   );
 }

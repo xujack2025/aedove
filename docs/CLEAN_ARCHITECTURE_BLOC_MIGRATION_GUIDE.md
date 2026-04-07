@@ -3,6 +3,20 @@
 > 目标：把当前项目从「UI + static service + setState」迁移到「Clean Architecture + OOP + BLoC」。
 > 原则：不一次性重写，分阶段替换，始终保持可运行。
 
+## 实施状态（2026-04-07）
+
+- [x] Phase 0：准备期
+- [x] Phase 1：Discovery 垂直切片
+- [x] Phase 2：Transfer 垂直切片
+- [x] Phase 3：Ads + Home Shell
+- [x] Phase 4：AppInit + Settings
+- [x] Phase 5：清理与测试（第一轮+第二轮）
+
+当前验证结果：
+- 页面层与 presentation 层不再直接 import service。
+- AppInit/Settings/Ads/Transfer 的关键 bloc 均有基础测试。
+- 关键测试通过：`flutter test test/app_init_bloc_test.dart test/settings_bloc_test.dart test/ads_bloc_test.dart test/transfer_bloc_test.dart`
+
 ## 1. 当前架构体检（你现在的真实状态）
 
 ### 1.1 现有分层现状

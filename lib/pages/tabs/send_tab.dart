@@ -5,12 +5,13 @@ import 'package:file_picker/file_picker.dart';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:wechat_assets_picker/wechat_assets_picker.dart';
-import 'package:aedove/services/file_transfer_service.dart';
+import 'package:aedove/domain/usecases/transfer/send_file_usecase.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path/path.dart' as p;
 import 'package:mime/mime.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../di/service_locator.dart';
 
 class SendTab extends StatefulWidget {
   const SendTab({super.key});
@@ -20,6 +21,8 @@ class SendTab extends StatefulWidget {
 }
 
 class _SendTabState extends State<SendTab> {
+  final SendFileUsecase _sendFileUsecase = sl<SendFileUsecase>();
+
   List<File> _selectedFiles = [];
   final Map<String, bool> _sendingByDeviceId = {};
   final Map<String, bool> _sentSuccessfullyByDeviceId = {};
@@ -374,7 +377,7 @@ class _SendTabState extends State<SendTab> {
 
     try {
       for (final file in _selectedFiles) {
-        await FileTransferService.sendFile(
+        await _sendFileUsecase(
           targetDeviceId: device.id,
           targetDeviceIP: device.ip,
           filePath: file.path,

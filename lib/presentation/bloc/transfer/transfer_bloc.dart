@@ -3,9 +3,8 @@ import 'dart:async';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../domain/entities/transfer_progress_entity.dart';
+import '../../../domain/entities/transfer_request_entity.dart';
 import '../../../domain/entities/transfer_status.dart';
-import '../../../domain/usecases/transfer/accept_transfer_usecase.dart';
-import '../../../domain/usecases/transfer/deny_transfer_usecase.dart';
 import '../../../domain/usecases/transfer/accept_transfer_usecase.dart';
 import '../../../domain/usecases/transfer/deny_transfer_usecase.dart';
 import '../../../domain/usecases/transfer/watch_file_saved_usecase.dart';
@@ -102,7 +101,7 @@ class TransferBloc extends Bloc<TransferEvent, TransferState> {
   ) {
     final progress = event.progress;
 
-    final updatedTransfers = Map<String, FileTransferProgress>.from(
+    final updatedTransfers = Map<String, TransferProgressEntity>.from(
       state.activeTransfers,
     );
     updatedTransfers[progress.requestId] = progress;
@@ -140,7 +139,7 @@ class TransferBloc extends Bloc<TransferEvent, TransferState> {
     TransferProgressCleanupRequested event,
     Emitter<TransferState> emit,
   ) {
-    final updatedTransfers = Map<String, FileTransferProgress>.from(
+    final updatedTransfers = Map<String, TransferProgressEntity>.from(
       state.activeTransfers,
     )..remove(event.requestId);
 

@@ -6,6 +6,23 @@ import '../../services/file_transfer_service.dart' as transfer_service;
 
 class TransferRepositoryImpl implements TransferRepository {
   @override
+  Future<void> sendFile({
+    required String targetDeviceId,
+    required String targetDeviceIP,
+    required String filePath,
+    required String fileName,
+    required int targetDevicePort,
+  }) {
+    return transfer_service.FileTransferService.sendFile(
+      targetDeviceId: targetDeviceId,
+      targetDeviceIP: targetDeviceIP,
+      filePath: filePath,
+      fileName: fileName,
+      targetDevicePort: targetDevicePort,
+    );
+  }
+
+  @override
   Stream<List<TransferRequestEntity>> watchRequests() {
     return transfer_service.FileTransferService.requestsStream.map(
       (requests) => requests
