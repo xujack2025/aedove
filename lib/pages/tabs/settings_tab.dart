@@ -1,8 +1,12 @@
 import 'dart:io';
-import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:network_info_plus/network_info_plus.dart';
+
+import 'package:aedove/presentation/bloc/settings/settings_bloc.dart';
+import 'package:aedove/presentation/bloc/settings/settings_event.dart';
+import 'package:aedove/presentation/bloc/settings/settings_state.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:network_info_plus/network_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class SettingsTab extends StatefulWidget {
@@ -13,91 +17,48 @@ class SettingsTab extends StatefulWidget {
 }
 
 class _SettingsTabState extends State<SettingsTab> {
-  String _deviceName = 'My Device';
-  String _deviceId = 'Unknown';
   String _ipAddress = 'Unknown';
-  // ignore: unused_field
-  bool _autoAcceptFiles = false;
-  bool _notificationsEnabled = true;
-  // ignore: unused_field
-  bool _backgroundServiceEnabled = true;
 
   @override
   void initState() {
     super.initState();
-    _loadSettings();
     _getDeviceInfo();
-  }
-
-  Future<void> _loadSettings() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _deviceName = prefs.getString('device_name') ?? 'My Device';
-      _deviceId = prefs.getString('device_id') ?? 'Unknown';
-      _autoAcceptFiles = prefs.getBool('auto_accept_files') ?? false;
-      _notificationsEnabled = prefs.getBool('notifications_enabled') ?? true;
-      _backgroundServiceEnabled =
-          prefs.getBool('background_service_enabled') ?? true;
-    });
   }
 
   Future<void> _getDeviceInfo() async {
     try {
       String ipAddress = 'Unknown';
       if (Platform.isWindows) {
-        try {
-          final interfaces = await NetworkInterface.list(
-            includeLinkLocal: false,
-            type: InternetAddressType.IPv4,
-          );
-
-          // Find the first non-loopback IPv4 address
-          for (var interface in interfaces) {
-            for (var addr in interface.addresses) {
-              if (!addr.isLoopback && addr.type == InternetAddressType.IPv4) {
-                ipAddress = addr.address;
-                break;
-              }
+        final interfaces = await NetworkInterface.list(
+          includeLinkLocal: false,
+          type: InternetAddressType.IPv4,
+        );
+        for (final interface in interfaces) {
+          for (final addr in interface.addresses) {
+            if (!addr.isLoopback && addr.type == InternetAddressType.IPv4) {
+              ipAddress = addr.address;
+              break;
             }
-            if (ipAddress != 'Unknown') break;
           }
-        } catch (e) {
-          debugPrint('Error getting Windows IP: $e');
+          if (ipAddress != 'Unknown') break;
         }
       } else {
         final networkInfo = NetworkInfo();
         final connectivityResult = await Connectivity().checkConnectivity();
-
         if (connectivityResult.isNotEmpty &&
             connectivityResult.first != ConnectivityResult.none) {
           ipAddress = await networkInfo.getWifiIP() ?? 'Unknown';
         }
       }
 
-      setState(() {
-        _ipAddress = ipAddress;
-      });
+      if (mounted) {
+        setState(() {
+          _ipAddress = ipAddress;
+        });
+      }
     } catch (e) {
       debugPrint('Error getting device info: $e');
     }
-  }
-
-  Future<void> _saveDeviceName(String name) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('device_name', name);
-    setState(() {
-      _deviceName = name;
-    });
-  }
-
-  Future<void> _saveSetting(String key, dynamic value) async {
-    final prefs = await SharedPreferences.getInstance();
-    if (value is bool) {
-      await prefs.setBool(key, value);
-    } else if (value is String) {
-      await prefs.setString(key, value);
-    }
-    setState(() {});
   }
 
   Widget _buildSectionCard({
@@ -156,236 +117,233 @@ class _SettingsTabState extends State<SettingsTab> {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(vertical: 0, horizontal: 24.0),
-      physics: const BouncingScrollPhysics(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const SizedBox(height: 24),
-          Text(
-            'Settings',
-            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: Theme.of(context).colorScheme.onSurface,
-            ),
+    return BlocConsumer<SettingsBloc, SettingsState>(
+      listenWhen: (previous, current) =>
+          previous.errorMessage != current.errorMessage &&
+          current.errorMessage != null,
+      listener: (context, state) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(state.errorMessage!),
+            backgroundColor: Colors.red,
           ),
-          const SizedBox(height: 8),
-          Text(
-            'Manage your device and preferences',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Theme.of(
-                context,
-              ).colorScheme.onSurface.withAlpha((0.6 * 255).round()),
-            ),
-          ),
-          const SizedBox(height: 32),
-
-          // Device Information
-          _buildSectionCard(
-            title: 'Device Information',
-            icon: Icons.devices_other_rounded,
+        );
+      },
+      builder: (context, state) {
+        return SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(vertical: 0, horizontal: 24.0),
+          physics: const BouncingScrollPhysics(),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.withAlpha((0.1 * 255).round()),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.edit_rounded,
-                    color: Colors.blue,
-                    size: 20,
-                  ),
-                ),
-                title: const Text(
-                  'Device Name',
-                  style: TextStyle(fontWeight: FontWeight.w500),
-                ),
-                subtitle: Text(_deviceName),
-                trailing: const Icon(Icons.chevron_right_rounded),
-                onTap: () => _showDeviceNameDialog(),
-              ),
-              const Divider(height: 24),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.purple.withAlpha((0.1 * 255).round()),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.fingerprint_rounded,
-                    color: Colors.purple,
-                    size: 20,
-                  ),
-                ),
-                title: const Text(
-                  'Device ID',
-                  style: TextStyle(fontWeight: FontWeight.w500),
-                ),
-                subtitle: Text(
-                  _deviceId,
-                  style: const TextStyle(fontFamily: 'monospace'),
+              const SizedBox(height: 24),
+              Text(
+                'Settings',
+                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).colorScheme.onSurface,
                 ),
               ),
-              const Divider(height: 24),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.orange.withAlpha((0.1 * 255).round()),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.wifi_rounded,
-                    color: Colors.orange,
-                    size: 20,
-                  ),
-                ),
-                title: const Text(
-                  'IP Address',
-                  style: TextStyle(fontWeight: FontWeight.w500),
-                ),
-                subtitle: Text(
-                  _ipAddress,
-                  style: const TextStyle(fontFamily: 'monospace'),
+              const SizedBox(height: 8),
+              Text(
+                'Manage your device and preferences',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withAlpha((0.6 * 255).round()),
                 ),
               ),
+              const SizedBox(height: 32),
+              _buildSectionCard(
+                title: 'Device Information',
+                icon: Icons.devices_other_rounded,
+                children: [
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.withAlpha((0.1 * 255).round()),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.edit_rounded,
+                        color: Colors.blue,
+                        size: 20,
+                      ),
+                    ),
+                    title: const Text(
+                      'Device Name',
+                      style: TextStyle(fontWeight: FontWeight.w500),
+                    ),
+                    subtitle: Text(state.deviceName),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () => _showDeviceNameDialog(state.deviceName),
+                  ),
+                  const Divider(height: 24),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.purple.withAlpha((0.1 * 255).round()),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.fingerprint_rounded,
+                        color: Colors.purple,
+                        size: 20,
+                      ),
+                    ),
+                    title: const Text(
+                      'Device ID',
+                      style: TextStyle(fontWeight: FontWeight.w500),
+                    ),
+                    subtitle: Text(
+                      state.deviceId,
+                      style: const TextStyle(fontFamily: 'monospace'),
+                    ),
+                  ),
+                  const Divider(height: 24),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.withAlpha((0.1 * 255).round()),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.wifi_rounded,
+                        color: Colors.orange,
+                        size: 20,
+                      ),
+                    ),
+                    title: const Text(
+                      'IP Address',
+                      style: TextStyle(fontWeight: FontWeight.w500),
+                    ),
+                    subtitle: Text(
+                      _ipAddress,
+                      style: const TextStyle(fontFamily: 'monospace'),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              _buildSectionCard(
+                title: 'Preferences',
+                icon: Icons.tune_rounded,
+                children: [
+                  SwitchListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                    title: const Text(
+                      'Notifications',
+                      style: TextStyle(fontWeight: FontWeight.w500),
+                    ),
+                    subtitle: const Text('Show alerts for file transfers'),
+                    value: state.notificationsEnabled,
+                    activeThumbColor: Colors.white,
+                    activeTrackColor: Theme.of(context).colorScheme.primary,
+                    inactiveThumbColor: Colors.grey.shade600,
+                    inactiveTrackColor: Colors.grey.shade300,
+                    onChanged: state.isLoading
+                        ? null
+                        : (value) {
+                            context.read<SettingsBloc>().add(
+                              SettingsNotificationsToggled(value),
+                            );
+                          },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              _buildSectionCard(
+                title: 'Contact Us',
+                icon: Icons.contact_mail_rounded,
+                children: [
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.green.withAlpha((0.1 * 255).round()),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.campaign_rounded,
+                        color: Colors.green,
+                        size: 20,
+                      ),
+                    ),
+                    title: const Text(
+                      'Advertise With Us',
+                      style: TextStyle(fontWeight: FontWeight.w500),
+                    ),
+                    subtitle: const Text('Post your ads in our app'),
+                    trailing: const Icon(Icons.open_in_new_rounded),
+                    onTap: _showContactDialog,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              _buildSectionCard(
+                title: 'About',
+                icon: Icons.info_outline_rounded,
+                children: [
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.teal.withAlpha((0.1 * 255).round()),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.verified_rounded,
+                        color: Colors.teal,
+                        size: 20,
+                      ),
+                    ),
+                    title: const Text(
+                      'Version',
+                      style: TextStyle(fontWeight: FontWeight.w500),
+                    ),
+                    subtitle: const Text('1.1.1'),
+                  ),
+                  const Divider(height: 24),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.indigo.withAlpha((0.1 * 255).round()),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.description_rounded,
+                        color: Colors.indigo,
+                        size: 20,
+                      ),
+                    ),
+                    title: const Text(
+                      'Description',
+                      style: TextStyle(fontWeight: FontWeight.w500),
+                    ),
+                    subtitle: const Text('Automated WiFi file sharing app'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 32),
             ],
           ),
-
-          const SizedBox(height: 24),
-
-          // File Transfer Preferences
-          _buildSectionCard(
-            title: 'Preferences',
-            icon: Icons.tune_rounded,
-            children: [
-              SwitchListTile(
-                // 1. Remove EdgeInsets.zero so it aligns with the title above it
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-                title: const Text(
-                  'Notifications',
-                  style: TextStyle(fontWeight: FontWeight.w500),
-                ),
-                subtitle: const Text('Show alerts for file transfers'),
-                value: _notificationsEnabled,
-                // 2. FIX: Set distinct colors for the Thumb (circle) and Track (background)
-                // When ON: White circle on Blue background
-                activeThumbColor: Colors.white,
-                activeTrackColor: Theme.of(context).colorScheme.primary,
-                // Optional: Style the "Off" state if needed
-                inactiveThumbColor: Colors.grey.shade600,
-                inactiveTrackColor: Colors.grey.shade300,
-
-                onChanged: (value) async {
-                  await _saveSetting('notifications_enabled', value);
-                  setState(() {
-                    _notificationsEnabled = value;
-                  });
-                },
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 24),
-
-          // Contact Us Section
-          _buildSectionCard(
-            title: 'Contact Us',
-            icon: Icons.contact_mail_rounded,
-            children: [
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.green.withAlpha((0.1 * 255).round()),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.campaign_rounded,
-                    color: Colors.green,
-                    size: 20,
-                  ),
-                ),
-                title: const Text(
-                  'Advertise With Us',
-                  style: TextStyle(fontWeight: FontWeight.w500),
-                ),
-                subtitle: const Text('Post your ads in our app'),
-                trailing: const Icon(Icons.open_in_new_rounded),
-                onTap: () {
-                  // TODO: Replace with actual contact/ads URL
-                  _showContactDialog();
-                },
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 24),
-
-          // About Us Section
-          _buildSectionCard(
-            title: 'About',
-            icon: Icons.info_outline_rounded,
-            children: [
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.teal.withAlpha((0.1 * 255).round()),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.verified_rounded,
-                    color: Colors.teal,
-                    size: 20,
-                  ),
-                ),
-                title: const Text(
-                  'Version',
-                  style: TextStyle(fontWeight: FontWeight.w500),
-                ),
-                subtitle: const Text('1.1.1'),
-              ),
-              const Divider(height: 24),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.indigo.withAlpha((0.1 * 255).round()),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.description_rounded,
-                    color: Colors.indigo,
-                    size: 20,
-                  ),
-                ),
-                title: const Text(
-                  'Description',
-                  style: TextStyle(fontWeight: FontWeight.w500),
-                ),
-                subtitle: const Text('Automated WiFi file sharing app'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 32),
-        ],
-      ),
+        );
+      },
     );
   }
 
-  void _showDeviceNameDialog() {
-    final controller = TextEditingController(text: _deviceName);
+  void _showDeviceNameDialog(String currentName) {
+    final controller = TextEditingController(text: currentName);
 
     showDialog(
       context: context,
@@ -405,7 +363,9 @@ class _SettingsTabState extends State<SettingsTab> {
           ),
           TextButton(
             onPressed: () {
-              _saveDeviceName(controller.text);
+              context.read<SettingsBloc>().add(
+                SettingsDeviceNameChanged(controller.text),
+              );
               Navigator.of(context).pop();
             },
             child: const Text('Save'),
