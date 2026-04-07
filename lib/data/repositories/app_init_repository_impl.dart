@@ -3,17 +3,25 @@ import 'dart:io';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../domain/repositories/app_init_repository.dart';
-import '../../services/background_service.dart';
-import '../../services/notification_service.dart';
-import '../../services/permission_service.dart';
+import '../datasources/app_init/app_init_data_source.dart';
+import '../datasources/notification/notification_data_source.dart';
+import '../datasources/permission/permission_data_source.dart';
 
 class AppInitRepositoryImpl implements AppInitRepository {
-  const AppInitRepositoryImpl();
+  const AppInitRepositoryImpl(
+    this._dataSource,
+    this._notificationDataSource,
+    this._permissionDataSource,
+  );
+
+  final AppInitDataSource _dataSource;
+  final NotificationDataSource _notificationDataSource;
+  final PermissionDataSource _permissionDataSource;
 
   @override
   Future<void> initialize() async {
-    await BackgroundService.initialize();
-    await NotificationService.initialize();
+    await _dataSource.initialize();
+    await _notificationDataSource.initialize();
     await _requestRuntimePermissions();
   }
 
@@ -21,7 +29,7 @@ class AppInitRepositoryImpl implements AppInitRepository {
     if (Platform.isAndroid) {
       final storageStatus = await Permission.storage.status;
       if (!storageStatus.isGranted && !storageStatus.isLimited) {
-        await PermissionService.requestStoragePermission();
+        await _permissionDataSource.requestStoragePermission();
       }
     }
 
@@ -33,7 +41,7 @@ class AppInitRepositoryImpl implements AppInitRepository {
           (Platform.isIOS && locationStatus.isPermanentlyDenied);
 
       if (!isUsable) {
-        await PermissionService.requestLocationPermission();
+        await _permissionDataSource.requestLocationPermission();
       }
     }
   }

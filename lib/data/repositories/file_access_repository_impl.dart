@@ -1,16 +1,18 @@
 import '../../domain/repositories/file_access_repository.dart';
-import '../../services/media_store_service.dart';
+import '../datasources/file_access/file_access_data_source.dart';
 
 class FileAccessRepositoryImpl implements FileAccessRepository {
-  const FileAccessRepositoryImpl();
+  const FileAccessRepositoryImpl(this._dataSource);
+
+  final FileAccessDataSource _dataSource;
 
   @override
   Future<bool> openFile(String filePath) {
-    return MediaStoreService.openFile(filePath);
+    return _dataSource.openFile(filePath);
   }
 
   @override
   Future<bool> showInFileManager(String filePath) {
-    return MediaStoreService.showInFileManager(filePath);
+    return _dataSource.showInFileManager(filePath);
   }
 }

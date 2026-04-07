@@ -1,23 +1,26 @@
 import 'package:aedove/domain/entities/device_type.dart';
-import 'package:aedove/services/device_discovery_service.dart';
-
+import '../datasources/device/device_discovery_data_source.dart';
 import '../../domain/entities/device_entity.dart';
 import '../../domain/repositories/device_repository.dart';
 
 class DeviceRepositoryImpl implements DeviceRepository {
+  const DeviceRepositoryImpl(this._dataSource);
+
+  final DeviceDiscoveryDataSource _dataSource;
+
   @override
   Future<void> startDiscovery() async {
-    await DeviceDiscoveryService.start();
+    await _dataSource.start();
   }
 
   @override
   Future<void> stopDiscovery() async {
-    await DeviceDiscoveryService.stop();
+    await _dataSource.stop();
   }
 
   @override
   Stream<List<DeviceEntity>> watchDevices() {
-    return DeviceDiscoveryService.devicesStream.map(
+    return _dataSource.watchDevices().map(
       (devices) => devices
           .map(
             (device) => DeviceEntity(

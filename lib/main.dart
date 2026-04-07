@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 // import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:aedove/pages/home_page.dart';
+import 'package:aedove/presentation/pages/home_page.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 import 'presentation/bloc/app_init/app_init_bloc.dart';
